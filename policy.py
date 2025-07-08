@@ -5,8 +5,8 @@ from torch.nn import functional as F
 import torchvision.transforms as transforms
 import numpy as np
 
-from diffusion_policy.models.base_nets import ResNet18Conv, SpatialSoftmax
-from diffusion_policy.models.diffusion_nets import replace_bn_with_gn, ConditionalUnet1D
+from models.base_nets import ResNet18Conv, SpatialSoftmax
+from models.diffusion_nets import replace_bn_with_gn, ConditionalUnet1D
 
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 from diffusers.schedulers.scheduling_ddim import DDIMScheduler

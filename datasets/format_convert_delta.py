@@ -54,16 +54,13 @@ def get_seq_euler_angles(seq_orientation):
     return seq_euler_angles.reshape(-1, 1, 3)
 
 
-root_dir = (
-    "/iag_ad_01/ad/tangyinzhou/tyz/test_peach_plate/bingwen/data_for_success/peach_plate_wooden"
-)
+root_dir = ("/home/chenyinuo/data/bingwen/diffusion_policy/data/test_green_bell_pepper/bingwen/data_for_success/")
+save_dir =  "/home/chenyinuo/data/bingwen/diffusion_policy/data/test_green_bell_pepper_delta"
 
-save_dir = "/iag_ad_01/ad/tangyinzhou/tyz/reward_diffusion_policy_relative/diffusion_policy/data/pickplace_0606"
 episode_idx = 0
 os.makedirs(save_dir, exist_ok=True)
 for task in os.listdir(root_dir):
     load_dir = os.path.join(root_dir, task, "success")
-    load_dir = "/iag_ad_01/ad/tangyinzhou/tyz/test_peach_plate/bingwen/data_for_success/peach_plate_wooden/success"
     for episode in tqdm(os.listdir(load_dir), total=len(os.listdir(load_dir))):
         try:
             data = np.load(

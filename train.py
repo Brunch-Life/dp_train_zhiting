@@ -224,9 +224,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--eval', action='store_true')
     parser.add_argument('--ckpt_dir', action='store', type=str, help='ckpt_dir',
-                        default="/iag_ad_01/ad/tangyinzhou/tyz/reward_diffusion_policy/diffusion_policy/data/diffusion_policy_checkpoints/" + now)
+                        default="/home/chenyinuo/data/bingwen/diffusion_policy/ckpts/" + now)
     parser.add_argument('--data_root', action='store', type=str, help='data_root', 
-                        default="/iag_ad_01/ad/tangyinzhou/tyz/reward_diffusion_policy/diffusion_policy/data/pick")
+                        default="/home/chenyinuo/data/bingwen/diffusion_policy/data/test_green_bell_pepper/bingwen/data_for_success")
     parser.add_argument('--batch_size', action='store', type=int, help='batch_size',default=16,) #  required=True
     parser.add_argument('--seed', action='store', type=int, help='seed', default=0,) # required=True
     parser.add_argument('--num_steps', action='store', type=int, help='num_steps', default=200_000,) # required=True

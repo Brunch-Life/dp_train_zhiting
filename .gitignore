@@ -17,3 +17,4 @@ checkpoint
 *.bash
 try.py
 data
+ckpts/

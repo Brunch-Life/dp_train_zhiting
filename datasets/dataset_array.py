@@ -11,12 +11,16 @@ import random
 import time
 from transforms3d.quaternions import qmult, qconjugate, quat2mat, mat2quat
 import sys
-sys.path.append('/home/zhouzhiting/Projects')
 from collections import defaultdict
 import numpy as np
 import threading
 
-from diffusion_policy.utils.math_utils import wrap_to_pi, euler2quat, quat2euler, get_pose_from_rot_pos
+from utils.math_utils import (
+    wrap_to_pi,
+    euler2quat,
+    quat2euler,
+    get_pose_from_rot_pos,
+)
 import copy
 from turbojpeg import TurboJPEG
 from turbojpeg import TJPF_RGB
@@ -51,7 +55,6 @@ def print_timing_stats():
             min_time = min(times)
             print(f"{operation:<30} - 平均: {avg_time*1000:.2f}ms, 最大: {max_time*1000:.2f}ms, 最小: {min_time*1000:.2f}ms, 调用次数: {len(times)}")
     print("=========================\n")
-
 
 
 class Sim2SimEpisodeDatasetEff(Dataset):
@@ -110,15 +113,15 @@ class Sim2SimEpisodeDatasetEff(Dataset):
                                 'privileged_obs': data['privileged_obs'],
                                 'action': data['action'],
                                 'desired_grasp_pose': data['desired_grasp_pose'],
-                                'desired_gripper_width': data['desired_gripper_width']
+                                'desired_gripper_width': data['desired_gripper_width'],
                             }
-            print("episode_list", len(episode_list))                           
-            if split == "train":
-                self.episode_list = episode_list[:int(0.99 * len(episode_list))]
-                self.num_steps_list = num_steps_list[:int(0.99 * len(episode_list))]
+            print("episode_list", len(episode_list))
+            if split == "train": #TODO(bingwen) 0.99-> 0.8
+                self.episode_list = episode_list[: int(0.8 * len(episode_list))]
+                self.num_steps_list = num_steps_list[: int(0.8 * len(episode_list))]
             else:
-                self.episode_list = episode_list[int(0.99 * len(episode_list)):]
-                self.num_steps_list = num_steps_list[int(0.99 * len(episode_list)):]
+                self.episode_list = episode_list[int(0.8 * len(episode_list)) :]
+                self.num_steps_list = num_steps_list[int(0.8 * len(episode_list)) :]
 
             self.cum_steps_list = np.cumsum(self.num_steps_list)
             print(split, len(self.episode_list), self.cum_steps_list[-1])
@@ -153,14 +156,14 @@ class Sim2SimEpisodeDatasetEff(Dataset):
             is_pad = result["is_pad"]
             action_chunk = result["action"]
             robot_state = (
-                                robot_state - self.pose_gripper_mean
-                        ) / self.pose_gripper_scale
+                robot_state - self.pose_gripper_mean
+            ) / self.pose_gripper_scale
             action_chunk[~is_pad] = (
-                                            action_chunk[~is_pad] - np.expand_dims(self.pose_gripper_mean, axis=0)
-                                    ) / np.expand_dims(self.pose_gripper_scale, axis=0)
+                action_chunk[~is_pad] - np.expand_dims(self.pose_gripper_mean, axis=0)
+            ) / np.expand_dims(self.pose_gripper_scale, axis=0)
             proprio_state = (
-                                    proprio_state - self.proprio_gripper_mean
-                            ) / self.proprio_gripper_scale
+                proprio_state - self.proprio_gripper_mean
+            ) / self.proprio_gripper_scale
 
             result["robot_state"] = torch.from_numpy(robot_state)
             result["proprio_state"] = torch.from_numpy(proprio_state)
@@ -168,13 +171,12 @@ class Sim2SimEpisodeDatasetEff(Dataset):
             result["is_pad"] = torch.from_numpy(is_pad)
             # for debug 
             # result["pose_chunk"] = torch.from_numpy(result["pose_chunk"]) #
-            
 
             images = torch.from_numpy(result["images"])
             images = torch.einsum('k h w c -> k c h w', images)
 
             if self.use_pre_img == False:
-                with TimingContext("image_processing"):    
+                with TimingContext("image_processing"):
                     if self.transformations is None:
                         # print('Initializing transformations')
                         original_size = images.shape[2:]
@@ -204,7 +206,15 @@ class Sim2SimEpisodeDatasetEff(Dataset):
 
     def update_obs_normalize_params(self, obs_normalize_params):
         self.OBS_NORMALIZE_PARAMS = copy.deepcopy(obs_normalize_params)
-        pickle.dump(obs_normalize_params, open(os.path.join(self.data_roots[0], f"norm_stats_{len(self.data_roots)}.pkl"), "wb"))
+        pickle.dump(
+            obs_normalize_params,
+            open(
+                os.path.join(
+                    self.data_roots[0], f"norm_stats_{len(self.data_roots)}.pkl"
+                ),
+                "wb",
+            ),
+        )
 
         self.pose_gripper_mean = np.concatenate(
             [
@@ -257,7 +267,9 @@ class Sim2SimEpisodeDatasetEff(Dataset):
                     image_filename = f"step_{start_ts}_cam_{cam}_processed.jpg"
                 else:
                     image_filename = f"step_{start_ts}_cam_{cam}.jpg"
-                image_path = os.path.join(data_root, f"seed_{s}", f"ep_{ep_id}", image_filename)
+                image_path = os.path.join(
+                    data_root, f"seed_{s}", f"ep_{ep_id}", image_filename
+                )
                 # image = imageio.imread(image_path)
                 with open(image_path, 'rb') as f:
                     jpeg_data = f.read()
@@ -284,21 +296,23 @@ class Sim2SimEpisodeDatasetEff(Dataset):
             robot_state = np.zeros((10,), dtype=np.float32)
 
             prev_pose = None
-
+            # @yinuo
             for step_idx in range(start_ts, end_ts):
                 tcp_pose = episode_data["tcp_pose"][step_idx]
                 pose_p, pose_q = tcp_pose[:3], tcp_pose[3:]
                 pose_mat = quat2mat(pose_q)
                 pose = get_pose_from_rot_pos(pose_mat, pose_p)
-            
+
                 if step_idx == start_ts:
                     pose_at_obs = pose
                     pose_mat_6 = pose_mat[:, :2].reshape(-1)
-                    proprio_state[:] = np.concatenate([
-                        pose_p,
-                        pose_mat_6,
-                        np.array([episode_data["gripper_width"][step_idx]]),
-                    ])
+                    proprio_state[:] = np.concatenate(
+                        [
+                            pose_p,
+                            pose_mat_6,
+                            np.array([episode_data["gripper_width"][step_idx]]),
+                        ]
+                    )
                     robot_state[-1] = episode_data["gripper_width"][step_idx]
 
                 elif step_idx > start_ts:
@@ -311,13 +325,17 @@ class Sim2SimEpisodeDatasetEff(Dataset):
                         desired_d_pose = get_pose_from_rot_pos(
                             quat2mat(desired_dq), desired_dp
                         )
-                        desired_pose = prev_pose @ desired_d_pose
+                        # desired_pose = prev_pose @ desired_d_pose
+                        desired_pose = desired_d_pose @ prev_pose
+                        # desired_pose = desired_d_pose
                         pose_chunk.append(desired_pose)
                         gripper_width_chunk.append(np.array([desired_gripper_width]))
                     else:
                         pose_chunk.append(pose)
-                        gripper_width_chunk.append(np.array([episode_data["gripper_width"][step_idx]]))
-                
+                        gripper_width_chunk.append(
+                            np.array([episode_data["gripper_width"][step_idx]])
+                        )
+
                 prev_pose = pose
 
             # compute the relative pose
@@ -327,16 +345,19 @@ class Sim2SimEpisodeDatasetEff(Dataset):
             )
             for i in range(end_ts - start_ts - 1):
                 _pose_relative = np.linalg.inv(pose_at_obs) @ pose_chunk[i]
-                action_chunk[i] = np.concatenate([
-                    _pose_relative[:3, 3],
-                    _pose_relative[:3, :2].reshape(-1),
-                    gripper_width_chunk[i],
-                ]) 
+                # _pose_relative = pose_chunk[i]
+                action_chunk[i] = np.concatenate(
+                    [
+                        _pose_relative[:3, 3],
+                        _pose_relative[:3, :2].reshape(-1),
+                        gripper_width_chunk[i],
+                    ]
+                )
 
             result_dict["robot_state"] = robot_state
             result_dict["proprio_state"] = proprio_state
             result_dict["action"] = action_chunk
-            # for debug 
+            # for debug
             # if len(pose_chunk) == 0:
             #     result_dict["pose_chunk"]  = np.zeros((4, 4), dtype=np.float32)
             # else:
@@ -441,20 +462,23 @@ def load_sim2sim_data(data_roots, num_seeds, train_batch_size, val_batch_size, c
         chunk_size=chunk_size,
         # norm_stats_path=os.path.join(data_roots[0], f"norm_stats_{len(data_roots)}.pkl"), 
         norm_stats_path=None, 
-        **kwargs
+        **kwargs,
     )
     val_dataset = Sim2SimEpisodeDatasetEff(
         data_roots,
         num_seeds,
         split="val",
         chunk_size=chunk_size,
-        norm_stats_path=os.path.join(data_roots[0], f"norm_stats_{len(data_roots)}.pkl"), 
-        **kwargs
+        norm_stats_path=os.path.join(
+            data_roots[0], f"norm_stats_{len(data_roots)}.pkl"
+        ),
+        **kwargs,
     )
     train_num_workers = 16 #8 
     val_num_workers = 16 #8 
     print(
-        f'Augment images: {train_dataset.augment_images}, train_num_workers: {train_num_workers}, val_num_workers: {val_num_workers}')
+        f"Augment images: {train_dataset.augment_images}, train_num_workers: {train_num_workers}, val_num_workers: {val_num_workers}"
+    )
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=train_batch_size,
@@ -471,7 +495,12 @@ def load_sim2sim_data(data_roots, num_seeds, train_batch_size, val_batch_size, c
         pin_memory=True,
         collate_fn=step_collate_fn,
     )
-    return train_dataloader, val_dataloader, train_dataset.OBS_NORMALIZE_PARAMS, val_dataset.OBS_NORMALIZE_PARAMS
+    return (
+        train_dataloader,
+        val_dataloader,
+        train_dataset.OBS_NORMALIZE_PARAMS,
+        val_dataset.OBS_NORMALIZE_PARAMS,
+    )
 
 
 if __name__ == "__main__":
@@ -500,4 +529,3 @@ if __name__ == "__main__":
         print(f"Error testing timing: {e}")
         import traceback
         traceback.print_exc()
-

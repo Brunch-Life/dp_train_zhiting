@@ -39,7 +39,8 @@ def main(args):
     data_roots = [args['data_root'] ]
 
     name = f"cano_4_{stamp}" # change here
-    num_seeds = 5000 # 
+    # num_seeds = 1000 # 
+    num_seeds = 5
 
     camera_names = ["third"]
     usages = ["obs"]
@@ -85,8 +86,8 @@ def main(args):
     config_path = os.path.join(ckpt_dir, 'config.pkl')
     expr_name = ckpt_dir.split('/')[-1]
 
-    train_dataloader, val_dataloader, train_norm_stats, val_norm_stats = load_sim2sim_data(
-        **data_config
+    train_dataloader, val_dataloader, train_norm_stats, val_norm_stats = (
+        load_sim2sim_data(**data_config)
     )
 
     if not is_eval:
@@ -155,7 +156,11 @@ def train_bc(train_dataloader, val_dataloader, config):
     for step in tqdm(range(num_steps + 1)):
         # validation
         if step % validate_every == 0:
-            print('validating')
+            try:
+                print("Train Loss:", loss.item())
+            except:
+                print(1)
+            print("validating")
 
             with torch.inference_mode():
                 policy.eval()
@@ -219,20 +224,20 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--eval', action='store_true')
     parser.add_argument('--ckpt_dir', action='store', type=str, help='ckpt_dir',
-                        default="/home/zhouzhiting/Data/panda_data/diffusion_policy_checkpoints/" + now)
+                        default="/iag_ad_01/ad/tangyinzhou/tyz/reward_diffusion_policy/diffusion_policy/data/diffusion_policy_checkpoints/" + now)
     parser.add_argument('--data_root', action='store', type=str, help='data_root', 
-                        default="/home/zhouzhiting/Data/panda_data/cano_policy_pd_3")
-    parser.add_argument('--batch_size', action='store', type=int, help='batch_size', required=True)
-    parser.add_argument('--seed', action='store', type=int, help='seed', required=True)
-    parser.add_argument('--num_steps', action='store', type=int, help='num_steps', required=True)
-    parser.add_argument('--lr', action='store', type=float, help='lr', required=True)
+                        default="/iag_ad_01/ad/tangyinzhou/tyz/reward_diffusion_policy/diffusion_policy/data/pick")
+    parser.add_argument('--batch_size', action='store', type=int, help='batch_size',default=16,) #  required=True
+    parser.add_argument('--seed', action='store', type=int, help='seed', default=0,) # required=True
+    parser.add_argument('--num_steps', action='store', type=int, help='num_steps', default=200_000,) # required=True
+    parser.add_argument('--lr', action='store', type=float, help='lr', default=1e-5,) # required=True
     parser.add_argument('--validate_every', action='store', type=int, default=2000, help='validate_every',
                         required=False)
     parser.add_argument('--save_every', action='store', type=int, default=20000, help='save_every', required=False)
     parser.add_argument('--resume_ckpt_path', action='store', type=str, help='resume_ckpt_path', required=False)
 
-    parser.add_argument('--chunk_size', action='store', type=int, help='chunk_size', required=False)
-    parser.add_argument('--hidden_dim', action='store', type=int, help='hidden_dim', required=False)
+    parser.add_argument('--chunk_size', action='store', type=int, help='chunk_size', default=8, required=False)
+    parser.add_argument('--hidden_dim', action='store', type=int, help='hidden_dim', default=7, required=False)
     parser.add_argument('--wandb_offline', action='store_true', help='wandb_offline')
     main(vars(parser.parse_args()))
 

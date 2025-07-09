@@ -109,11 +109,7 @@ class Sim2SimEpisodeDatasetEff(Dataset):
                             self.episode_data[item_index] = {
                                 'tcp_pose': data['tcp_pose'],
                                 'gripper_width': data['gripper_width'],
-                                'robot_joints': data['robot_joints'],
-                                'privileged_obs': data['privileged_obs'],
                                 'action': data['action'],
-                                'desired_grasp_pose': data['desired_grasp_pose'],
-                                'desired_gripper_width': data['desired_gripper_width'],
                             }
             print("episode_list", len(episode_list))
             if split == "train": #TODO(bingwen) 0.99-> 0.8
@@ -165,7 +161,7 @@ class Sim2SimEpisodeDatasetEff(Dataset):
                 proprio_state - self.proprio_gripper_mean
             ) / self.proprio_gripper_scale
 
-            result["robot_state"] = torch.from_numpy(robot_state)
+            result["robot_state"] = torch.from_numpy(robot_state) # actually not used during trainig time. 
             result["proprio_state"] = torch.from_numpy(proprio_state)
             result["action"] = torch.from_numpy(action_chunk)
             result["is_pad"] = torch.from_numpy(is_pad)
@@ -288,23 +284,22 @@ class Sim2SimEpisodeDatasetEff(Dataset):
             episode_data = self.episode_data[(data_idx, s, ep_id)]
 
         with TimingContext("pose_processing"):
-            action_chunk = np.zeros((self.chunk_size, 10), dtype=np.float32)
             pose_at_obs = None
-            pose_chunk = []
+            abs_pose_chunk = []
             gripper_width_chunk = []
             proprio_state = np.zeros((10,), dtype=np.float32)
             robot_state = np.zeros((10,), dtype=np.float32)
 
-            prev_pose = None
-            # @yinuo
-            for step_idx in range(start_ts, end_ts):
+            prev_obs_pose = None
+
+            for step_idx in range(start_ts, end_ts): # in an action chunk(from start to end)
                 tcp_pose = episode_data["tcp_pose"][step_idx]
                 pose_p, pose_q = tcp_pose[:3], tcp_pose[3:]
                 pose_mat = quat2mat(pose_q)
-                pose = get_pose_from_rot_pos(pose_mat, pose_p)
+                obs_pose = get_pose_from_rot_pos(pose_mat, pose_p)
 
                 if step_idx == start_ts:
-                    pose_at_obs = pose
+                    pose_at_obs = obs_pose # chunk t=0
                     pose_mat_6 = pose_mat[:, :2].reshape(-1)
                     proprio_state[:] = np.concatenate(
                         [
@@ -315,38 +310,38 @@ class Sim2SimEpisodeDatasetEff(Dataset):
                     )
                     robot_state[-1] = episode_data["gripper_width"][step_idx]
 
-                elif step_idx > start_ts:
+                elif step_idx > start_ts: # maybe have problems @ bingwen to be modified here.
                     if self.use_desired_action:
-                        desired_action = episode_data["action"][step_idx]
-                        desired_dp = desired_action[:3]
-                        desired_dq = euler2quat(desired_action[3:6])
-                        desired_gripper_width = desired_action[-1]
+                        desired_delta_action = episode_data["action"][step_idx]
+                        desired_delta_pos = desired_delta_action[:3]
+                        desired_delta_quat = euler2quat(desired_delta_action[3:6]) # w, x, y, z
+                        desired_gripper_width = desired_delta_action[-1]
 
-                        desired_d_pose = get_pose_from_rot_pos(
-                            quat2mat(desired_dq), desired_dp
+                        desired_delta_pose = get_pose_from_rot_pos(
+                            quat2mat(desired_delta_quat), desired_delta_pos
                         )
-                        # desired_pose = prev_pose @ desired_d_pose
-                        desired_pose = desired_d_pose @ prev_pose
-                        # desired_pose = desired_d_pose
-                        pose_chunk.append(desired_pose)
+                        desired_pose = prev_obs_pose @ desired_delta_pose # original from zhiting
+                        abs_pose_chunk.append(desired_pose) # absolute pose in pose_chunk 
                         gripper_width_chunk.append(np.array([desired_gripper_width]))
                     else:
-                        pose_chunk.append(pose)
+                        abs_pose_chunk.append(obs_pose)
                         gripper_width_chunk.append(
                             np.array([episode_data["gripper_width"][step_idx]])
                         )
 
-                prev_pose = pose
+                prev_obs_pose = obs_pose
 
             # compute the relative pose
             _pose_relative = np.eye(4)
             robot_state[:9] = np.concatenate(
                 [_pose_relative[:3, 3], _pose_relative[:3, :2].reshape(-1)]
             )
+
+            delta_action_chunk = np.zeros((self.chunk_size, 10), dtype=np.float32)
             for i in range(end_ts - start_ts - 1):
-                _pose_relative = np.linalg.inv(pose_at_obs) @ pose_chunk[i]
-                # _pose_relative = pose_chunk[i]
-                action_chunk[i] = np.concatenate(
+                _pose_relative = np.linalg.inv(pose_at_obs) @ abs_pose_chunk[i]
+                # _pose_relative = abs_pose_chunk[i]
+                delta_action_chunk[i] = np.concatenate(
                     [
                         _pose_relative[:3, 3],
                         _pose_relative[:3, :2].reshape(-1),
@@ -354,9 +349,9 @@ class Sim2SimEpisodeDatasetEff(Dataset):
                     ]
                 )
 
-            result_dict["robot_state"] = robot_state
-            result_dict["proprio_state"] = proprio_state
-            result_dict["action"] = action_chunk
+            result_dict["robot_state"] = robot_state # the pose of robot in the world frame, shape (10,), not used during training
+            result_dict["proprio_state"] = proprio_state # shape (10,)
+            result_dict["action"] = delta_action_chunk # shape (chunk_size, 10)
             # for debug
             # if len(pose_chunk) == 0:
             #     result_dict["pose_chunk"]  = np.zeros((4, 4), dtype=np.float32)
@@ -399,11 +394,11 @@ class Sim2SimEpisodeDatasetEff(Dataset):
 
         for i in tqdm(range(len(self))):
             item_dict = self.get_unnormalized_item(i)
-            pose = item_dict["robot_state"][:9]
+            pose = item_dict["robot_state"][:9] # not be used
             action_pose = item_dict["action"][~item_dict["is_pad"]][:, :9]
-            gripper_width = item_dict["robot_state"][9:10]
             action_gripper_width = item_dict["action"][~item_dict["is_pad"]][:, 9:10]
             proprio_pose = item_dict["proprio_state"][:9]
+            gripper_width = item_dict["proprio_state"][9:10]
 
             pose_min = safe_minimum(
                 safe_minimum(pose_min, pose), safe_min(action_pose, axis=0)

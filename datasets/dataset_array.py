@@ -10,6 +10,7 @@ from tqdm import tqdm
 import random
 import time
 from transforms3d.quaternions import qmult, qconjugate, quat2mat, mat2quat
+from transforms3d.euler import euler2mat, mat2euler
 import sys
 from collections import defaultdict
 import numpy as np
@@ -110,14 +111,14 @@ class Sim2SimEpisodeDatasetEff(Dataset):
                         num_steps = data['gripper_width'].shape[0]
 
                         if num_steps > 1:
-                            item_index = (data_idx, s, 0)  # ep_id 始终为0
+                            item_index = (data_idx, s, 0)  # ep_id is always 0
                             episode_list.append(item_index)
                             num_steps_list.append(num_steps)
-                
                             self.episode_data[item_index] = {
                                 'tcp_pose': data['tcp_pose'],
                                 'gripper_width': data['gripper_width'],
-                                'action': data['action'],
+                                'delta_action': data['delta_action'],
+                                'abs_action': data['abs_action'],
                             }
             print("episode_list", len(episode_list))
             if split == "train": #TODO(bingwen) 0.99-> 0.8
@@ -320,7 +321,11 @@ class Sim2SimEpisodeDatasetEff(Dataset):
 
                 elif step_idx > start_ts:
                     abs_action = episode_data["abs_action"][step_idx]
-                    abs_pose_chunk.append(abs_action)
+                    abs_action_pose = get_pose_from_rot_pos(
+                        euler2mat(abs_action[3], abs_action[4], abs_action[5], "sxyz"), abs_action[:3]
+                    )
+                    abs_pose_chunk.append(abs_action_pose)
+                    gripper_width_chunk.append(np.array([episode_data["gripper_width"][step_idx]]))
 
                     # if self.use_desired_action:
                     #     desired_delta_action = episode_data["action"][step_idx]

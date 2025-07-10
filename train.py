@@ -39,8 +39,7 @@ def main(args):
     data_roots = [args['data_root'] ]
 
     name = f"cano_4_{stamp}" # change here
-    # num_seeds = 1000 # 
-    num_seeds = 5
+    num_seeds = args['episode_num']  # 500
 
     camera_names = ["third"]
     usages = ["obs"]
@@ -77,7 +76,7 @@ def main(args):
         'lr': args['lr'],
         'policy_config': policy_config,
         'data_config': data_config,
-        'seed': args['seed'],
+        'seed': args['train_seed'],
         'batch_size': batch_size,
     }
 
@@ -228,7 +227,8 @@ if __name__ == '__main__':
     parser.add_argument('--data_root', action='store', type=str, help='data_root', 
                         default="/home/chenyinuo/data/bingwen/diffusion_policy/data/test_green_bell_pepper/bingwen/data_for_success")
     parser.add_argument('--batch_size', action='store', type=int, help='batch_size',default=16,) #  required=True
-    parser.add_argument('--seed', action='store', type=int, help='seed', default=0,) # required=True
+    parser.add_argument('--train_seed', action='store', type=int, help='train_seed', default=0,) # required=True
+    parser.add_argument('--episode_num', action='store', type=int, help='episode_num', default=500,) # required=True
     parser.add_argument('--num_steps', action='store', type=int, help='num_steps', default=200_000,) # required=True
     parser.add_argument('--lr', action='store', type=float, help='lr', default=1e-5,) # required=True
     parser.add_argument('--validate_every', action='store', type=int, default=2000, help='validate_every',

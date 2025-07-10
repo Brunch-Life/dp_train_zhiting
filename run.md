@@ -2,6 +2,7 @@
 
 ```bash
 python datasets/format_convert_delta.py 
+PYTHONPATH=. python datasets/convert_bingwen.py
 ```
 
 

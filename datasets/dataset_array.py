@@ -92,11 +92,19 @@ class Sim2SimEpisodeDatasetEff(Dataset):
                 for data_idx, data_root in enumerate(self.data_roots):
                     for s in range(num_seeds):
                         seed_path = os.path.join(data_root, f"seed_{s}")
-                        total_steps_path = os.path.join(seed_path, "ep_0", "total_steps.npz")  # total_steps_new.npz
+                        total_steps_path = os.path.join(seed_path, "ep_0", "total_steps.npy") 
                         if not os.path.exists(total_steps_path):
-                            continue
-                            
-                        data = np.load(total_steps_path, allow_pickle=True)
+                            total_steps_path = os.path.join(seed_path, "ep_0", "total_steps.npz") 
+                            if not os.path.exists(total_steps_path):
+                                continue
+                        
+                        if total_steps_path.endswith(".npz"):
+                            data = np.load(total_steps_path, allow_pickle=True)
+                        elif total_steps_path.endswith(".npy"):
+                            data = np.load(total_steps_path, allow_pickle=True).item()
+                        else:
+                            raise ValueError(f"Unsupported file format: {total_steps_path}")
+
                         # metadata = data['metadata'].item()
                         # num_steps = metadata['num_steps']
                         num_steps = data['gripper_width'].shape[0]
@@ -310,26 +318,29 @@ class Sim2SimEpisodeDatasetEff(Dataset):
                     )
                     robot_state[-1] = episode_data["gripper_width"][step_idx]
 
-                elif step_idx > start_ts: # maybe have problems @ bingwen to be modified here.
-                    if self.use_desired_action:
-                        desired_delta_action = episode_data["action"][step_idx]
-                        desired_delta_pos = desired_delta_action[:3]
-                        desired_delta_quat = euler2quat(desired_delta_action[3:6]) # w, x, y, z
-                        desired_gripper_width = desired_delta_action[-1]
+                elif step_idx > start_ts:
+                    abs_action = episode_data["abs_action"][step_idx]
+                    abs_pose_chunk.append(abs_action)
 
-                        desired_delta_pose = get_pose_from_rot_pos(
-                            quat2mat(desired_delta_quat), desired_delta_pos
-                        )
-                        desired_pose = prev_obs_pose @ desired_delta_pose # original from zhiting
-                        abs_pose_chunk.append(desired_pose) # absolute pose in pose_chunk 
-                        gripper_width_chunk.append(np.array([desired_gripper_width]))
-                    else:
-                        abs_pose_chunk.append(obs_pose)
-                        gripper_width_chunk.append(
-                            np.array([episode_data["gripper_width"][step_idx]])
-                        )
+                    # if self.use_desired_action:
+                    #     desired_delta_action = episode_data["action"][step_idx]
+                    #     desired_delta_pos = desired_delta_action[:3]
+                    #     desired_delta_quat = euler2quat(desired_delta_action[3:6]) # w, x, y, z
+                    #     desired_gripper_width = desired_delta_action[-1]
 
-                prev_obs_pose = obs_pose
+                    #     desired_delta_pose = get_pose_from_rot_pos(
+                    #         quat2mat(desired_delta_quat), desired_delta_pos
+                    #     )
+                    #     desired_pose = prev_obs_pose @ desired_delta_pose # original from zhiting
+                    #     abs_pose_chunk.append(desired_pose) # absolute pose in pose_chunk 
+                    #     gripper_width_chunk.append(np.array([desired_gripper_width]))
+                    # else:
+                    #     abs_pose_chunk.append(obs_pose) # obs_pose from zhiting, bingwen think should be abs_action
+                    #     gripper_width_chunk.append(
+                    #         np.array([episode_data["gripper_width"][step_idx]])
+                    #     )
+
+                prev_obs_pose = obs_pose # just for resume the abs_action for the dataset.
 
             # compute the relative pose
             _pose_relative = np.eye(4)
@@ -338,9 +349,8 @@ class Sim2SimEpisodeDatasetEff(Dataset):
             )
 
             delta_action_chunk = np.zeros((self.chunk_size, 10), dtype=np.float32)
-            for i in range(end_ts - start_ts - 1):
-                _pose_relative = np.linalg.inv(pose_at_obs) @ abs_pose_chunk[i]
-                # _pose_relative = abs_pose_chunk[i]
+            for i in range(end_ts - start_ts - 1): # only use delta action to train
+                _pose_relative = np.linalg.inv(pose_at_obs) @ abs_pose_chunk[i] # in tool base
                 delta_action_chunk[i] = np.concatenate(
                     [
                         _pose_relative[:3, 3],

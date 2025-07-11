@@ -1,8 +1,10 @@
-import numpy as np
 import os
 import cv2
 import time
+import tyro
+import numpy as np
 from tqdm import *
+from dataclasses import dataclass
 from transforms3d.euler import euler2mat, mat2euler, quat2euler, quat2mat, euler2quat
 from utils.math_utils import get_pose_from_rot_pos
 from concurrent.futures import ThreadPoolExecutor
@@ -59,9 +61,18 @@ def inv_scale_action(action, low, high):
     return (action - 0.5 * (high + low)) / (0.5 * (high - low))
 
 
+@dataclass
+class Args:
+    root_dir: str
+    save_dir: str
+
+
 if __name__ == "__main__":
-    root_dir = ("/home/chenyinuo/data/bingwen/diffusion_policy/data/test_green_bell_pepper/bingwen/data_for_success/")
-    save_dir =  "/home/chenyinuo/data/bingwen/diffusion_policy/data/test_green_bell_pepper_delta_bingwen"
+    args = tyro.cli(Args)
+    root_dir = (args.root_dir)
+    save_dir = args.save_dir
+    print(f"Root directory: {root_dir}")
+    print(f"Save directory: {save_dir}")
 
     episode_idx = 0
     os.makedirs(save_dir, exist_ok=True)

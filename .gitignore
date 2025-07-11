@@ -13,8 +13,7 @@ demos
 logs
 wandb
 checkpoint
-*.txt
 *.bash
 try.py
-data
+dataset
 ckpts/

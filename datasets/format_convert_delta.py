@@ -55,7 +55,7 @@ def get_seq_euler_angles(seq_orientation):
 
 
 root_dir = ("/home/chenyinuo/data/bingwen/diffusion_policy/data/test_green_bell_pepper/bingwen/data_for_success/")
-save_dir =  "/home/chenyinuo/data/bingwen/diffusion_policy/data/test_green_bell_pepper_delta"
+save_dir =  "/home/chenyinuo/data/bingwen/diffusion_policy/data/test_green_bell_pepper_delta_bingwen"
 
 episode_idx = 0
 os.makedirs(save_dir, exist_ok=True)

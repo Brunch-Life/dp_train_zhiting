@@ -23,7 +23,6 @@ stamp = datetime.datetime.now().strftime("%m%d_%H%M")
 
 def main(args):
     set_seed(0)
-    # command line parameters
     is_eval = args['eval']
     ckpt_dir = args['ckpt_dir']
     batch_size = args['batch_size']
@@ -199,9 +198,6 @@ def train_bc(train_dataloader, val_dataloader, config):
             ckpt_path = os.path.join(ckpt_dir, f'policy_step_{step}_seed_{seed}.ckpt')
             torch.save(policy.serialize(), ckpt_path)
 
-    # ckpt_path = os.path.join(ckpt_dir, f'policy_last.ckpt')
-    # torch.save(policy.serialize(), ckpt_path)
-
     best_step, min_val_loss, best_state_dict = best_ckpt_info
     ckpt_path = os.path.join(ckpt_dir, f'policy_step_{best_step}_seed_{seed}.ckpt')
     torch.save(best_state_dict, ckpt_path)
@@ -231,7 +227,7 @@ if __name__ == '__main__':
     parser.add_argument('--episode_num', action='store', type=int, help='episode_num', default=500,) # required=True
     parser.add_argument('--num_steps', action='store', type=int, help='num_steps', default=200_000,) # required=True
     parser.add_argument('--lr', action='store', type=float, help='lr', default=1e-5,) # required=True
-    parser.add_argument('--validate_every', action='store', type=int, default=2000, help='validate_every',
+    parser.add_argument('--validate_every', action='store', type=int, default=5000, help='validate_every',
                         required=False)
     parser.add_argument('--save_every', action='store', type=int, default=20000, help='save_every', required=False)
     parser.add_argument('--resume_ckpt_path', action='store', type=str, help='resume_ckpt_path', required=False)

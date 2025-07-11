@@ -5,13 +5,10 @@ import pickle
 from time import time
 from torch.utils.data import DataLoader, Dataset
 import torchvision.transforms as transforms
-import colorsys
 from tqdm import tqdm
-import random
 import time
-from transforms3d.quaternions import qmult, qconjugate, quat2mat, mat2quat
+from transforms3d.quaternions import quat2mat, mat2quat
 from transforms3d.euler import euler2mat, mat2euler
-import sys
 from collections import defaultdict
 import numpy as np
 import threading
@@ -106,8 +103,6 @@ class Sim2SimEpisodeDatasetEff(Dataset):
                         else:
                             raise ValueError(f"Unsupported file format: {total_steps_path}")
 
-                        # metadata = data['metadata'].item()
-                        # num_steps = metadata['num_steps']
                         num_steps = data['gripper_width'].shape[0]
 
                         if num_steps > 1:
@@ -139,14 +134,6 @@ class Sim2SimEpisodeDatasetEff(Dataset):
             self.update_obs_normalize_params(stats)
 
             result_0 = self.__getitem__(0) 
-            # for debug
-            # with open("dataset_array_result_0.txt", "w") as f:
-            #     f.write(str(result_0))
-            # # Save images from result_0 for debugging
-            # images = result_0["images"]
-            # img = images[-1]
-            # img_path = f"dataset_array_result_0_image1.png"
-            # transforms.ToPILImage()(img).save(img_path)
 
     def __len__(self):
         return self.cum_steps_list[-1]
@@ -299,8 +286,6 @@ class Sim2SimEpisodeDatasetEff(Dataset):
             proprio_state = np.zeros((10,), dtype=np.float32)
             robot_state = np.zeros((10,), dtype=np.float32)
 
-            prev_obs_pose = None
-
             for step_idx in range(start_ts, end_ts): # in an action chunk(from start to end)
                 tcp_pose = episode_data["tcp_pose"][step_idx]
                 pose_p, pose_q = tcp_pose[:3], tcp_pose[3:]
@@ -325,27 +310,7 @@ class Sim2SimEpisodeDatasetEff(Dataset):
                         euler2mat(abs_action[3], abs_action[4], abs_action[5], "sxyz"), abs_action[:3]
                     )
                     abs_pose_chunk.append(abs_action_pose)
-                    gripper_width_chunk.append(np.array([episode_data["gripper_width"][step_idx]]))
-
-                    # if self.use_desired_action:
-                    #     desired_delta_action = episode_data["action"][step_idx]
-                    #     desired_delta_pos = desired_delta_action[:3]
-                    #     desired_delta_quat = euler2quat(desired_delta_action[3:6]) # w, x, y, z
-                    #     desired_gripper_width = desired_delta_action[-1]
-
-                    #     desired_delta_pose = get_pose_from_rot_pos(
-                    #         quat2mat(desired_delta_quat), desired_delta_pos
-                    #     )
-                    #     desired_pose = prev_obs_pose @ desired_delta_pose # original from zhiting
-                    #     abs_pose_chunk.append(desired_pose) # absolute pose in pose_chunk 
-                    #     gripper_width_chunk.append(np.array([desired_gripper_width]))
-                    # else:
-                    #     abs_pose_chunk.append(obs_pose) # obs_pose from zhiting, bingwen think should be abs_action
-                    #     gripper_width_chunk.append(
-                    #         np.array([episode_data["gripper_width"][step_idx]])
-                    #     )
-
-                prev_obs_pose = obs_pose # just for resume the abs_action for the dataset.
+                    gripper_width_chunk.append(abs_action[-1:])
 
             # compute the relative pose
             _pose_relative = np.eye(4)
@@ -367,11 +332,6 @@ class Sim2SimEpisodeDatasetEff(Dataset):
             result_dict["robot_state"] = robot_state # the pose of robot in the world frame, shape (10,), not used during training
             result_dict["proprio_state"] = proprio_state # shape (10,)
             result_dict["action"] = delta_action_chunk # shape (chunk_size, 10)
-            # for debug
-            # if len(pose_chunk) == 0:
-            #     result_dict["pose_chunk"]  = np.zeros((4, 4), dtype=np.float32)
-            # else:
-            #     result_dict["pose_chunk"] = np.array(pose_chunk)
 
         return result_dict
 

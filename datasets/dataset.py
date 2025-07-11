@@ -12,9 +12,7 @@ import time
 import imageio
 from transforms3d.quaternions import qmult, qconjugate, quat2mat, mat2quat
 import sys
-sys.path.append('/home/zhouzhiting/Projects')
-
-from diffusion_policy.utils.math_utils import wrap_to_pi, euler2quat, quat2euler, get_pose_from_rot_pos
+from utils.math_utils import wrap_to_pi, euler2quat, quat2euler, get_pose_from_rot_pos
 from tqdm import tqdm
 import copy
 

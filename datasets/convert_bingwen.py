@@ -54,9 +54,14 @@ def get_pos_euler_from_T_matrix(T_matrix): # only for test
     return position, euler
 
 
+def inv_scale_action(action, low, high):
+    """Inverse of `clip_and_scale_action` without clipping. -> [-1, 1]"""
+    return (action - 0.5 * (high + low)) / (0.5 * (high - low))
+
+
 if __name__ == "__main__":
     root_dir = ("/home/chenyinuo/data/bingwen/diffusion_policy/data/test_green_bell_pepper/bingwen/data_for_success/")
-    save_dir =  "/home/chenyinuo/data/bingwen/diffusion_policy/data/test_green_bell_pepper_delta_bingwen_new_T"
+    save_dir =  "/home/chenyinuo/data/bingwen/diffusion_policy/data/test_green_bell_pepper_delta_bingwen"
 
     episode_idx = 0
     os.makedirs(save_dir, exist_ok=True)
@@ -75,7 +80,7 @@ if __name__ == "__main__":
 
             state_tcp_pose = np.concatenate([state_pos, state_quat],axis=-1,) # (T, 7)
             gripper_width = data["state"]["effector"]["position_gripper"].squeeze()
-            gripper_width = (gripper_width - (-0.01))/(0.04 - (-0.01))
+            gripper_width = inv_scale_action(gripper_width, -0.01, 0.04)  # normalize to [-1, 1] to match the action space in mainiskill
 
             # get action
             action_gripper = data["action"]["effector"]["position_gripper"] # shape (T, 1)

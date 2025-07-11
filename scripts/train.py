@@ -7,14 +7,10 @@ from copy import deepcopy
 from itertools import repeat
 from tqdm import tqdm
 import wandb
-import time
-from torchvision import transforms
 
-# from datasets.dataset import load_sim2sim_data   #diffusion_policy.
-from datasets.dataset_array import load_sim2sim_data   #diffusion_policy.
-
-from utils.utils import compute_dict_mean, set_seed  #diffusion_policy.
-from policy import DiffusionPolicy  #diffusion_policy.
+from datasets.dataset_array import load_sim2sim_data
+from utils.utils import compute_dict_mean, set_seed
+from models.policy import DiffusionPolicy
 
 import datetime
 

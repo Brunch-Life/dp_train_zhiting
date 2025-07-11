@@ -2,8 +2,10 @@ import os
 import cv2
 import time
 import tyro
+import shutil
 import numpy as np
 from tqdm import *
+from PIL import Image
 from dataclasses import dataclass
 from transforms3d.euler import euler2mat, mat2euler, quat2euler, quat2mat, euler2quat
 from utils.math_utils import get_pose_from_rot_pos
@@ -61,6 +63,17 @@ def inv_scale_action(action, low, high):
     return (action - 0.5 * (high + low)) / (0.5 * (high - low))
 
 
+def squeeze_dict(data):
+    data["state"]["end"]["position"] = data["state"]["end"]["position"].squeeze()
+    data["state"]["end"]["orientation"] = data["state"]["end"]["orientation"].squeeze()
+    data["state"]["effector"]["position_gripper"] = data["state"]["effector"]["position_gripper"].squeeze()
+    data["action"]["end"]["position"] = data["action"]["end"]["position"].squeeze()
+    data["action"]["end"]["orientation"] = data["action"]["end"]["orientation"].squeeze()
+    data["action"]["effector"]["position_gripper"] = data["action"]["effector"]["position_gripper"].squeeze()
+    return data
+
+
+
 @dataclass
 class Args:
     root_dir: str
@@ -77,26 +90,38 @@ if __name__ == "__main__":
     episode_idx = 0
     os.makedirs(save_dir, exist_ok=True)
     for task in os.listdir(root_dir):
+        task = "red_apple_plate_wooden"  # for test
         load_dir = os.path.join(root_dir, task, "success")
         for episode in tqdm(os.listdir(load_dir), total=len(os.listdir(load_dir))):
             try:
-                # t0 = time.time()
-                data = np.load(os.path.join(load_dir, episode),allow_pickle=True,)["arr_0"].tolist()
-                # print("Load time (without tolist):", time.time() - t0)
-            except:
+                print(f"loading episode data: {episode}")
+                if episode.endswith(".npz"):
+                    data = np.load(os.path.join(load_dir, episode), allow_pickle=True)["arr_0"]
+                    data = data.tolist()
+                elif episode.endswith(".npy"):
+                    data = np.load(os.path.join(load_dir, episode), allow_pickle=True).item()
+                else:
+                    print(f"Skipping {episode}, not a valid file format.")
+                    continue
+            except Exception as e:
+                print(f"Error loading {episode}. Skipping...")
+                print(e)
                 continue
+            
+            # squeeze the data
+            data = squeeze_dict(data)
 
             # get state
-            state_pos, state_quat = data["state"]["end"]["position"].squeeze(), data["state"]["end"]["orientation"].squeeze()
+            state_pos, state_quat = data["state"]["end"]["position"], data["state"]["end"]["orientation"]
 
             state_tcp_pose = np.concatenate([state_pos, state_quat],axis=-1,) # (T, 7)
-            gripper_width = data["state"]["effector"]["position_gripper"].squeeze()
+            state_gripper_width = data["state"]["effector"]["position_gripper"]
             # we need to check the gripper width range !!
-            gripper_width = inv_scale_action(gripper_width, -0.01, 0.04)  # normalize to [-1, 1] to match the action space in mainiskill
+            state_gripper_width = inv_scale_action(state_gripper_width, -0.01, 0.04)  # normalize to [-1, 1] to match the action space in mainiskill
 
             # get action
-            action_gripper = data["action"]["effector"]["position_gripper"] # shape (T, 1)
-            action_pos, action_quat = data["action"]["end"]["position"].squeeze(), data["action"]["end"]["orientation"].squeeze()
+            action_gripper = data["action"]["effector"]["position_gripper"][:,None] # shape (T, 1)
+            action_pos, action_quat = data["action"]["end"]["position"], data["action"]["end"]["orientation"]
             action_euler = np.array([quat2euler(action_quat[i], "sxyz") for i in range(action_quat.shape[0])]) # shape (T, 3)
             abs_action_output = np.concatenate([action_pos, action_euler, action_gripper],axis=-1,) # shape (T, 7)
 
@@ -114,61 +139,43 @@ if __name__ == "__main__":
             delta_action_euler = np.array([mat2euler(delta_action_mat[i]) for i in range(delta_action_mat.shape[0])])
 
             # action in `frame` frame
-            delta_action_output = np.concatenate([delta_action_pos, delta_action_euler, action_gripper,],axis=-1).squeeze() # shape (T, 7)
-
-            # # others test in base frame
-            # delta_action_pos = np.zeros_like(data["action"]["end"]["position"].squeeze())
-            # delta_action_pos[0] = data["action"]["end"]["position"][0].squeeze() - data["state"]["end"]["position"][0].squeeze()
-            # delta_action_pos[1:] = data["action"]["end"]["position"][1:].squeeze() - data["action"]["end"]["position"][:-1].squeeze()
-
-            # delta_action_euler = np.zeros_like(data["action"]["end"]["position"].squeeze())
-            # delta_action_euler[0] = get_delta_euler_angles(
-            #     quat_t1 = data["action"]["end"]["orientation"][0].squeeze(), 
-            #     quat_t0 = data["state"]["end"]["orientation"][0].squeeze(),
-            #     frame=frame,
-            # )
-            # delta_action_euler[1:] = get_seq_delta_euler_angles(
-            #     seq_t1=data["action"]["end"]["orientation"][1:].squeeze(), 
-            #     seq_t0=data["action"]["end"]["orientation"][:-1].squeeze(),
-            #     frame=frame,
-            # )
-            # temp_delta_action = np.concatenate([delta_action_pos, delta_action_euler, action_gripper,],axis=-1).squeeze()
+            delta_action_output = np.concatenate([delta_action_pos, delta_action_euler, action_gripper,],axis=-1) # shape (T, 7)
 
             save_path = os.path.join(
                 save_dir,
                 f"seed_{episode_idx}",
                 f"ep_0",
             )
+            if os.path.exists(save_path):
+                shutil.rmtree(save_path)
+                print(f"Removed existing directory: {save_path}")
             os.makedirs(save_path, exist_ok=True)
-            dict_data = {
-                "tcp_pose": state_tcp_pose,           # shape: (T, 3+4)
-                "gripper_width": gripper_width,       # shape: (T,)
-                "delta_action": delta_action_output,  # shape: (T, 3+3+1)
-                "abs_action": abs_action_output,      # shape: (T, 3+3+1)
-            }
-            np.save(os.path.join(save_path, "total_steps.npy"), dict_data)
+            
+            rgb_list = data["observation"]["rgb"]
+            # wrist_rgb_list = data["observation"]["wrist_rgb"]
+            wrist_rgb_list = None  # not used in this dataset
+            
+            # dict_data = {
+            #     "is_image_encode": data["observation"]["is_image_encode"],
+            #     "tcp_pose": state_tcp_pose,                       # shape: (T, 3+4)
+            #     "state_gripper_width": state_gripper_width,       # shape: (T,)
+            #     "delta_action": delta_action_output,              # shape: (T, 3+3+1)
+            #     "abs_action": abs_action_output,                  # shape: (T, 3+3+1)
+            #     "cam_third": rgb_list,                            # shape: (T, H, W, 3)
+            #     "cam_wrist": wrist_rgb_list,                      # shape: (T, H, W, 3)
+            # }
+            # np.save(os.path.join(save_path, "total_steps.npy"), dict_data)
 
-            # np.savez_compressed(
-            #     os.path.join(save_path, "total_steps.npz"),
-            #     tcp_pose=state_tcp_pose, # state (T, 3+4)
-            #     gripper_width=gripper_width, # state (T)
-            #     action=delta_action_output, # delta_action_output or abs_action_output? (T, 3+3+1)
-            # )
+            np.savez_compressed(
+                os.path.join(save_path, "total_steps.npz"),
+                is_image_encode=data["observation"]["is_image_encode"],# bool
+                tcp_pose=state_tcp_pose,                # state (T, 3+4)
+                state_gripper_width=state_gripper_width,            # state (T)
+                delta_action=delta_action_output,       # delta_action_output or abs_action_output? (T, 3+3+1)
+                abs_action=abs_action_output,           # abs_action_output (T, 3+3+1)
+                cam_third=rgb_list,                     # cam_third (T, H, W, 3)
+                cam_wrist=wrist_rgb_list,               # cam_wrist (T, H, W, 3)
+            )
 
-            # # for spped up the saving process
-            # rgb_array = data["observation"]["rgb"]
-            # bgr_array = rgb_array[..., ::-1]  # RGB to BGR
-            # def save_image(time):
-            #     bgr = bgr_array[time]
-            #     filename = os.path.join(save_path, f"step_{time}_cam_third.jpg")
-            #     cv2.imwrite(filename, bgr)
-            # with ThreadPoolExecutor(max_workers=32) as executor:
-            #     executor.map(save_image, range(data["observation"]["rgb"].shape[0]))
-
-            for time in range(data["observation"]["rgb"].shape[0]):
-                cv2.imwrite(
-                    os.path.join(save_path, f"step_{time}_cam_third.jpg"),
-                    cv2.cvtColor(data["observation"]["rgb"][time], cv2.COLOR_RGB2BGR),
-                )
             episode_idx += 1
         break

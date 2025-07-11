@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import os
+import cv2
 import pickle
 from time import time
 from torch.utils.data import DataLoader, Dataset
@@ -12,7 +13,7 @@ from transforms3d.euler import euler2mat, mat2euler
 from collections import defaultdict
 import numpy as np
 import threading
-
+from PIL import Image
 from utils.math_utils import (
     wrap_to_pi,
     euler2quat,
@@ -20,8 +21,7 @@ from utils.math_utils import (
     get_pose_from_rot_pos,
 )
 import copy
-from turbojpeg import TurboJPEG
-from turbojpeg import TJPF_RGB
+
 
 
 timing_stats = defaultdict(list)
@@ -55,6 +55,20 @@ def print_timing_stats():
     print("=========================\n")
 
 
+def get_image_sequence_from_bytes(image_bytes_list):
+    images_list = []
+    for image_bytes in image_bytes_list: # for the length of each item in the list not equal
+        image_array = np.frombuffer(image_bytes, np.uint8)
+        image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+        images_list.append(image)
+    return np.array(images_list)
+
+def get_image_from_bytes(image_bytes):
+    image_array = np.frombuffer(image_bytes, np.uint8)
+    image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+    return image
+
+
 class Sim2SimEpisodeDatasetEff(Dataset):
     def __init__(
             self,
@@ -70,9 +84,6 @@ class Sim2SimEpisodeDatasetEff(Dataset):
     ):
         super().__init__()
         with TimingContext("dataset_initialization"):  #time
-            
-            self.jpeg = TurboJPEG()
-
             self.data_roots = data_roots
             self.camera_names = kwargs.get("camera_names", ["third", "wrist"])
             self.chunk_size = chunk_size
@@ -87,9 +98,9 @@ class Sim2SimEpisodeDatasetEff(Dataset):
             num_steps_list = []
 
             with TimingContext("total_steps loading"): #time
-                for data_idx, data_root in enumerate(self.data_roots):
-                    for s in range(num_seeds):
-                        seed_path = os.path.join(data_root, f"seed_{s}")
+                for data_dir_idx, data_root in enumerate(self.data_roots):
+                    for seed in range(num_seeds):
+                        seed_path = os.path.join(data_root, f"seed_{seed}")
                         total_steps_path = os.path.join(seed_path, "ep_0", "total_steps.npy") 
                         if not os.path.exists(total_steps_path):
                             total_steps_path = os.path.join(seed_path, "ep_0", "total_steps.npz") 
@@ -103,17 +114,21 @@ class Sim2SimEpisodeDatasetEff(Dataset):
                         else:
                             raise ValueError(f"Unsupported file format: {total_steps_path}")
 
-                        num_steps = data['gripper_width'].shape[0]
+                        num_steps = data['tcp_pose'].shape[0]
 
                         if num_steps > 1:
-                            item_index = (data_idx, s, 0)  # ep_id is always 0
+                            ep_id = 0  # ep_id is always 0
+                            item_index = (data_dir_idx, seed, ep_id)  
                             episode_list.append(item_index)
                             num_steps_list.append(num_steps)
                             self.episode_data[item_index] = {
+                                "is_image_encode": data['is_image_encode'],
                                 'tcp_pose': data['tcp_pose'],
-                                'gripper_width': data['gripper_width'],
+                                'state_gripper_width': data['state_gripper_width'],
                                 'delta_action': data['delta_action'],
                                 'abs_action': data['abs_action'],
+                                'cam_third': data['cam_third'],
+                                'cam_wrist': data['cam_wrist'],
                             }
             print("episode_list", len(episode_list))
             if split == "train": #TODO(bingwen) 0.99-> 0.8
@@ -139,7 +154,7 @@ class Sim2SimEpisodeDatasetEff(Dataset):
         return self.cum_steps_list[-1]
 
     def __getitem__(self, index: int):
-        with TimingContext("getitem_total"):  
+        with TimingContext("getitem_total"):
             with TimingContext("get_unnormalized_item"):    
                 result = self.get_unnormalized_item(index)
 
@@ -196,44 +211,6 @@ class Sim2SimEpisodeDatasetEff(Dataset):
         start_ts = index - steps_before
         return traj_idx, start_ts
 
-    def update_obs_normalize_params(self, obs_normalize_params):
-        self.OBS_NORMALIZE_PARAMS = copy.deepcopy(obs_normalize_params)
-        pickle.dump(
-            obs_normalize_params,
-            open(
-                os.path.join(
-                    self.data_roots[0], f"norm_stats_{len(self.data_roots)}.pkl"
-                ),
-                "wb",
-            ),
-        )
-
-        self.pose_gripper_mean = np.concatenate(
-            [
-                self.OBS_NORMALIZE_PARAMS[key]["mean"]
-                for key in ["pose", "gripper_width"]
-            ]
-        )
-        self.pose_gripper_scale = np.concatenate(
-            [
-                self.OBS_NORMALIZE_PARAMS[key]["scale"]
-                for key in ["pose", "gripper_width"]
-            ]
-        )
-
-        self.proprio_gripper_mean = np.concatenate(
-            [
-                self.OBS_NORMALIZE_PARAMS[key]["mean"]
-                for key in ["proprio_state", "gripper_width"]
-            ]
-        )
-        self.proprio_gripper_scale = np.concatenate(
-            [
-                self.OBS_NORMALIZE_PARAMS[key]["scale"]
-                for key in ["proprio_state", "gripper_width"]
-            ]
-        )
-
     def get_unnormalized_item(self, index):
         result_dict = {}
         result_dict["lang"] = " "
@@ -246,43 +223,41 @@ class Sim2SimEpisodeDatasetEff(Dataset):
                 is_pad[-(start_ts + self.chunk_size + 1 - end_ts):] = True
             result_dict["is_pad"] = is_pad
 
-            data_idx, s, ep_id = self.episode_list[traj_idx]
-            data_root = self.data_roots[data_idx]
+            data_dir_idx, seed, ep_id = self.episode_list[traj_idx]
+            data_root = self.data_roots[data_dir_idx]
 
+        with TimingContext("data_fetching"):
+            episode_data = self.episode_data[(data_dir_idx, seed, ep_id)]
+            
         # image
         with TimingContext("image_loading"):
             images = []
-            for cam in self.camera_names: # so difficult to debug, maybe just use npz file to extract the image.
-                # image_path = os.path.join(data_root, f"seed_{s}", f"ep_{ep_id}", f"step_{start_ts}_cam_{cam}.jpg")
-                if self.use_pre_img:
-                    # _processed.jpg
-                    image_filename = f"step_{start_ts}_cam_{cam}_processed.jpg"
-                else:
-                    image_filename = f"step_{start_ts}_cam_{cam}.jpg"
-                image_path = os.path.join(
-                    data_root, f"seed_{s}", f"ep_{ep_id}", image_filename
-                )
-                # image = imageio.imread(image_path)
-                with open(image_path, 'rb') as f:
-                    jpeg_data = f.read()
+
+            for cam_name in self.camera_names:
+                image = episode_data.get("cam_"+cam_name, None)[start_ts]
+                if image is None:
+                    continue
+
+                if episode_data["is_image_encode"]:
                     try:
-                        image = self.jpeg.decode(jpeg_data, pixel_format=TJPF_RGB)  #0
+                        image = get_image_from_bytes(image)
+                        # save the jpeg, just for debug
+                        # Image.fromarray(image).save(os.path.join(data_root, f"seed_{seed}", f"ep_{ep_id}", f"{cam_name}_img_{start_ts}.jpeg"))
                     except Exception as e:
                         import wandb
-                        print(f"Error decoding image {image_path}: {e}")
-                        wandb.log({"error": f"Error decoding image {image_path}: {e}"})
-
+                        print(f"Error decoding image for {cam_name} at index {index}: {e}")
+                        wandb.log({"error": f"Error decoding image for {cam_name} at index {index}: {e}"})
+                        continue
+                
                 images.append(image)
+
             images = np.stack(images, axis=0)
             result_dict["images"] = images
-
-        with TimingContext("data_fetching"):
-            episode_data = self.episode_data[(data_idx, s, ep_id)]
 
         with TimingContext("pose_processing"):
             pose_at_obs = None
             abs_pose_chunk = []
-            gripper_width_chunk = []
+            action_gripper_width_chunk = []
             proprio_state = np.zeros((10,), dtype=np.float32)
             robot_state = np.zeros((10,), dtype=np.float32)
 
@@ -299,10 +274,10 @@ class Sim2SimEpisodeDatasetEff(Dataset):
                         [
                             pose_p,
                             pose_mat_6,
-                            np.array([episode_data["gripper_width"][step_idx]]),
+                            np.array([episode_data["state_gripper_width"][step_idx]]),
                         ]
                     )
-                    robot_state[-1] = episode_data["gripper_width"][step_idx]
+                    robot_state[-1] = episode_data["state_gripper_width"][step_idx]
 
                 elif step_idx > start_ts:
                     abs_action = episode_data["abs_action"][step_idx]
@@ -310,7 +285,7 @@ class Sim2SimEpisodeDatasetEff(Dataset):
                         euler2mat(abs_action[3], abs_action[4], abs_action[5], "sxyz"), abs_action[:3]
                     )
                     abs_pose_chunk.append(abs_action_pose)
-                    gripper_width_chunk.append(abs_action[-1:])
+                    action_gripper_width_chunk.append(abs_action[-1:])
 
             # compute the relative pose
             _pose_relative = np.eye(4)
@@ -325,7 +300,7 @@ class Sim2SimEpisodeDatasetEff(Dataset):
                     [
                         _pose_relative[:3, 3],
                         _pose_relative[:3, :2].reshape(-1),
-                        gripper_width_chunk[i],
+                        action_gripper_width_chunk[i],
                     ]
                 )
 
@@ -373,7 +348,7 @@ class Sim2SimEpisodeDatasetEff(Dataset):
             action_pose = item_dict["action"][~item_dict["is_pad"]][:, :9]
             action_gripper_width = item_dict["action"][~item_dict["is_pad"]][:, 9:10]
             proprio_pose = item_dict["proprio_state"][:9]
-            gripper_width = item_dict["proprio_state"][9:10]
+            state_gripper_width = item_dict["proprio_state"][9:10] # state
 
             pose_min = safe_minimum(
                 safe_minimum(pose_min, pose), safe_min(action_pose, axis=0)
@@ -382,11 +357,11 @@ class Sim2SimEpisodeDatasetEff(Dataset):
                 safe_maximum(pose_max, pose), safe_max(action_pose, axis=0)
             )
             gripper_width_min = safe_minimum(
-                safe_minimum(gripper_width_min, gripper_width),
+                safe_minimum(gripper_width_min, state_gripper_width),
                 safe_min(action_gripper_width, axis=0),
             )
             gripper_width_max = safe_maximum(
-                safe_maximum(gripper_width_max, gripper_width),
+                safe_maximum(gripper_width_max, state_gripper_width),
                 safe_max(action_gripper_width, axis=0),
             )
             proprio_min = safe_minimum(
@@ -396,20 +371,58 @@ class Sim2SimEpisodeDatasetEff(Dataset):
                 proprio_max, proprio_pose
             )
 
-        params = {}
-        params["pose"] = {
+        obs_normalize_params = {}
+        obs_normalize_params["pose"] = {
             "mean": (pose_min + pose_max) / 2,
             "scale": np.maximum((pose_max - pose_min) / 2, scale_eps),
         }
-        params["gripper_width"] = {
+        obs_normalize_params["gripper_width"] = {
             "mean": (gripper_width_min + gripper_width_max) / 2,
             "scale": np.maximum((gripper_width_max - gripper_width_min) / 2, scale_eps),
         }
-        params["proprio_state"] = {
+        obs_normalize_params["proprio_state"] = {
             "mean": (proprio_min + proprio_max) / 2,
             "scale": np.maximum((proprio_max - proprio_min) / 2, scale_eps),
         }
-        return params
+        return obs_normalize_params
+
+    def update_obs_normalize_params(self, obs_normalize_params):
+        self.OBS_NORMALIZE_PARAMS = copy.deepcopy(obs_normalize_params)
+        pickle.dump(
+            obs_normalize_params,
+            open(
+                os.path.join(
+                    self.data_roots[0], f"norm_stats_{len(self.data_roots)}.pkl"
+                ),
+                "wb",
+            ),
+        )
+
+        self.pose_gripper_mean = np.concatenate(
+            [
+                self.OBS_NORMALIZE_PARAMS[key]["mean"]
+                for key in ["pose", "gripper_width"]
+            ]
+        )
+        self.pose_gripper_scale = np.concatenate(
+            [
+                self.OBS_NORMALIZE_PARAMS[key]["scale"]
+                for key in ["pose", "gripper_width"]
+            ]
+        )
+
+        self.proprio_gripper_mean = np.concatenate(
+            [
+                self.OBS_NORMALIZE_PARAMS[key]["mean"]
+                for key in ["proprio_state", "gripper_width"]
+            ]
+        )
+        self.proprio_gripper_scale = np.concatenate(
+            [
+                self.OBS_NORMALIZE_PARAMS[key]["scale"]
+                for key in ["proprio_state", "gripper_width"]
+            ]
+        )
 
 
 def step_collate_fn(samples):

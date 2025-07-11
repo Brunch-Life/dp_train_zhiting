@@ -29,6 +29,7 @@ The output of `get_unnormalized_item()`
     - proprio_state, 一直都是观察帧的tcp pose，重复chunk个用来对齐 (maybe false)
     - ndarray, (chunk_size, 10d)
 - result_dict["image"]
+    - [cam_num, height(width), width(height), 3]
 
 
 ## normalization

@@ -33,7 +33,7 @@ def main(args):
 
     data_roots = [args['data_root'] ]
 
-    name = f"cano_4_{stamp}" # change here
+    name = f"dp_train_{stamp}" # change here
     num_seeds = args['episode_num']  # 500
 
     camera_names = ["third"]
@@ -215,9 +215,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--eval', action='store_true')
     parser.add_argument('--ckpt_dir', action='store', type=str, help='ckpt_dir',
-                        default="/home/chenyinuo/data/bingwen/diffusion_policy/ckpts/" + now)
+                        default="ckpts/" + now)
     parser.add_argument('--data_root', action='store', type=str, help='data_root', 
-                        default="/home/chenyinuo/data/bingwen/diffusion_policy/data/test_green_bell_pepper/bingwen/data_for_success")
+                        default="dataset/test_green_bell_pepper/bingwen/data_for_success")
     parser.add_argument('--batch_size', action='store', type=int, help='batch_size',default=16,) #  required=True
     parser.add_argument('--train_seed', action='store', type=int, help='train_seed', default=0,) # required=True
     parser.add_argument('--episode_num', action='store', type=int, help='episode_num', default=500,) # required=True

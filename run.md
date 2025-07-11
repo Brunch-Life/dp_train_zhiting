@@ -8,7 +8,7 @@ PYTHONPATH=. python datasets/convert_bingwen.py
 
 ### train
 ```bash
-CUDA_VISIBLE_DEVICES=7 python scripts/train.py \
+CUDA_VISIBLE_DEVICES=7 PYTHONPATH=. python scripts/train.py \
 --data_root /home/chenyinuo/data/dp/diffusion_policy/data/test_green_bell_pepper_delta_bingwen \
 --batch_size 128 \
 --chunk_size 20 \
@@ -17,6 +17,6 @@ CUDA_VISIBLE_DEVICES=7 python scripts/train.py \
 --lr 1e-5 \
 --train_seed 0 \
 --episode_num 500 \
---validate_every 2_000 \
+--validate_every 2_000
 ```
 

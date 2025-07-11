@@ -252,7 +252,7 @@ class Sim2SimEpisodeDatasetEff(Dataset):
         # image
         with TimingContext("image_loading"):
             images = []
-            for cam in self.camera_names:
+            for cam in self.camera_names: # so difficult to debug, maybe just use npz file to extract the image.
                 # image_path = os.path.join(data_root, f"seed_{s}", f"ep_{ep_id}", f"step_{start_ts}_cam_{cam}.jpg")
                 if self.use_pre_img:
                     # _processed.jpg

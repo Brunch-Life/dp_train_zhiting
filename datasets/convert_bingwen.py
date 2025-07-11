@@ -80,6 +80,7 @@ if __name__ == "__main__":
 
             state_tcp_pose = np.concatenate([state_pos, state_quat],axis=-1,) # (T, 7)
             gripper_width = data["state"]["effector"]["position_gripper"].squeeze()
+            # we need to check the gripper width range !!
             gripper_width = inv_scale_action(gripper_width, -0.01, 0.04)  # normalize to [-1, 1] to match the action space in mainiskill
 
             # get action

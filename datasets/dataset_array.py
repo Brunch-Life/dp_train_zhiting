@@ -98,9 +98,10 @@ class Sim2SimEpisodeDatasetEff(Dataset):
             num_steps_list = []
 
             with TimingContext("total_steps loading"): #time
+                print("*"*20 + "total_steps loading" + "*"*20)
                 for data_dir_idx, data_root in enumerate(self.data_roots):
-                    for seed in range(num_seeds):
-                        seed_path = os.path.join(data_root, f"seed_{seed}")
+                    for seed in tqdm(range(num_seeds), desc=f"Loading from {data_root}", position=0):
+                        seed_path = os.path.join(data_root, f"seed_{seed}") # seed here means episode_index
                         total_steps_path = os.path.join(seed_path, "ep_0", "total_steps.npy") 
                         if not os.path.exists(total_steps_path):
                             total_steps_path = os.path.join(seed_path, "ep_0", "total_steps.npz") 
@@ -108,35 +109,37 @@ class Sim2SimEpisodeDatasetEff(Dataset):
                                 continue
                         
                         if total_steps_path.endswith(".npz"):
-                            data = np.load(total_steps_path, allow_pickle=True)
+                            single_traj_data = np.load(total_steps_path, allow_pickle=True)
                         elif total_steps_path.endswith(".npy"):
-                            data = np.load(total_steps_path, allow_pickle=True).item()
+                            # to test
+                            single_traj_data = np.load(total_steps_path, allow_pickle=True).item()
                         else:
                             raise ValueError(f"Unsupported file format: {total_steps_path}")
 
-                        num_steps = data['tcp_pose'].shape[0]
+                        traj_num_steps = single_traj_data['tcp_pose'].shape[0]
 
-                        if num_steps > 1:
+                        if traj_num_steps > 1:
                             ep_id = 0  # ep_id is always 0
                             item_index = (data_dir_idx, seed, ep_id)  
                             episode_list.append(item_index)
-                            num_steps_list.append(num_steps)
+                            num_steps_list.append(traj_num_steps)
                             self.episode_data[item_index] = {
-                                "is_image_encode": data['is_image_encode'],
-                                'tcp_pose': data['tcp_pose'],
-                                'state_gripper_width': data['state_gripper_width'],
-                                'delta_action': data['delta_action'],
-                                'abs_action': data['abs_action'],
-                                'cam_third': data['cam_third'],
-                                'cam_wrist': data['cam_wrist'],
+                                "is_image_encode": single_traj_data['is_image_encode'],
+                                'tcp_pose': single_traj_data['tcp_pose'],
+                                'state_gripper_width': single_traj_data['state_gripper_width'],
+                                'delta_action': single_traj_data['delta_action'],
+                                'abs_action': single_traj_data['abs_action'],
+                                'cam_third': single_traj_data['cam_third'],
+                                'cam_wrist': single_traj_data['cam_wrist'],
                             }
+                            
             print("episode_list", len(episode_list))
-            if split == "train": #TODO(bingwen) 0.99-> 0.8
-                self.episode_list = episode_list[: int(0.8 * len(episode_list))]
-                self.num_steps_list = num_steps_list[: int(0.8 * len(episode_list))]
+            if split == "train": #TODO(bingwen) 0.99 -> 0.9
+                self.episode_list = episode_list[: int(0.9 * len(episode_list))]
+                self.num_steps_list = num_steps_list[: int(0.9 * len(episode_list))]
             else:
-                self.episode_list = episode_list[int(0.8 * len(episode_list)) :]
-                self.num_steps_list = num_steps_list[int(0.8 * len(episode_list)) :]
+                self.episode_list = episode_list[int(0.9 * len(episode_list)) :]
+                self.num_steps_list = num_steps_list[int(0.9 * len(episode_list)) :]
 
             self.cum_steps_list = np.cumsum(self.num_steps_list)
             print(split, len(self.episode_list), self.cum_steps_list[-1])
@@ -241,7 +244,7 @@ class Sim2SimEpisodeDatasetEff(Dataset):
                 if episode_data["is_image_encode"]:
                     try:
                         image = get_image_from_bytes(image)
-                        # save the jpeg, just for debug
+                        # # save the jpeg, just for debug
                         # Image.fromarray(image).save(os.path.join(data_root, f"seed_{seed}", f"ep_{ep_id}", f"{cam_name}_img_{start_ts}.jpeg"))
                     except Exception as e:
                         import wandb
@@ -343,6 +346,7 @@ class Sim2SimEpisodeDatasetEff(Dataset):
             return np.max(a, axis=axis)
 
         for i in tqdm(range(len(self))):
+
             item_dict = self.get_unnormalized_item(i)
             pose = item_dict["robot_state"][:9] # not be used
             action_pose = item_dict["action"][~item_dict["is_pad"]][:, :9]

@@ -6,6 +6,7 @@ import shutil
 import numpy as np
 from tqdm import *
 from PIL import Image
+from typing import Optional
 from dataclasses import dataclass
 from transforms3d.euler import euler2mat, mat2euler, quat2euler, quat2mat, euler2quat
 from utils.math_utils import get_pose_from_rot_pos
@@ -57,7 +58,7 @@ def get_pos_euler_from_T_matrix(T_matrix): # only for test
     euler = mat2euler(rot_matrix)
     return position, euler
 
-
+# not use now
 def inv_scale_action(action, low, high):
     """Inverse of `clip_and_scale_action` without clipping. -> [-1, 1]"""
     return (action - 0.5 * (high + low)) / (0.5 * (high - low))
@@ -72,13 +73,11 @@ def squeeze_dict(data):
     data["action"]["effector"]["position_gripper"] = data["action"]["effector"]["position_gripper"].squeeze()
     return data
 
-
-
 @dataclass
 class Args:
     root_dir: str
     save_dir: str
-
+    max_task_num: Optional[int] = None
 
 if __name__ == "__main__":
     args = tyro.cli(Args)
@@ -89,12 +88,17 @@ if __name__ == "__main__":
 
     episode_idx = 0
     os.makedirs(save_dir, exist_ok=True)
-    for task in os.listdir(root_dir):
-        task = "red_apple_plate_wooden"  # for test
+    all_tasks = os.listdir(root_dir)
+    for task_idx, task in enumerate(all_tasks, start=1):
+        if args.max_task_num is not None and task_idx > args.max_task_num:
+            print(f"Reached max task limit: {args.max_task_num}. Stopping.")
+            break
         load_dir = os.path.join(root_dir, task, "success")
-        for episode in tqdm(os.listdir(load_dir), total=len(os.listdir(load_dir))):
+        print(f"\n🔧 Processing task {task_idx}/{len(all_tasks)}: {task}")
+        print(f"📂 Loading from: {load_dir}")
+        episodes = os.listdir(load_dir)
+        for episode in tqdm(episodes, desc=f"Task {task_idx}: {task}", total=len(episodes)):
             try:
-                print(f"loading episode data: {episode}")
                 if episode.endswith(".npz"):
                     data = np.load(os.path.join(load_dir, episode), allow_pickle=True)["arr_0"]
                     data = data.tolist()
@@ -116,8 +120,6 @@ if __name__ == "__main__":
 
             state_tcp_pose = np.concatenate([state_pos, state_quat],axis=-1,) # (T, 7)
             state_gripper_width = data["state"]["effector"]["position_gripper"]
-            # we need to check the gripper width range !!
-            state_gripper_width = inv_scale_action(state_gripper_width, -0.01, 0.04)  # normalize to [-1, 1] to match the action space in mainiskill
 
             # get action
             action_gripper = data["action"]["effector"]["position_gripper"][:,None] # shape (T, 1)
@@ -151,26 +153,15 @@ if __name__ == "__main__":
                 print(f"Removed existing directory: {save_path}")
             os.makedirs(save_path, exist_ok=True)
             
-            rgb_list = data["observation"]["rgb"]
-            # wrist_rgb_list = data["observation"]["wrist_rgb"]
+            rgb_list = np.array(data["observation"]["rgb"], dtype=object) # for ragged data
+            # wrist_rgb_list = np.array(data["observation"]["wrist_rgb"], dtype=object) # for ragged data
             wrist_rgb_list = None  # not used in this dataset
             
-            # dict_data = {
-            #     "is_image_encode": data["observation"]["is_image_encode"],
-            #     "tcp_pose": state_tcp_pose,                       # shape: (T, 3+4)
-            #     "state_gripper_width": state_gripper_width,       # shape: (T,)
-            #     "delta_action": delta_action_output,              # shape: (T, 3+3+1)
-            #     "abs_action": abs_action_output,                  # shape: (T, 3+3+1)
-            #     "cam_third": rgb_list,                            # shape: (T, H, W, 3)
-            #     "cam_wrist": wrist_rgb_list,                      # shape: (T, H, W, 3)
-            # }
-            # np.save(os.path.join(save_path, "total_steps.npy"), dict_data)
-
             np.savez_compressed(
                 os.path.join(save_path, "total_steps.npz"),
                 is_image_encode=data["observation"]["is_image_encode"],# bool
                 tcp_pose=state_tcp_pose,                # state (T, 3+4)
-                state_gripper_width=state_gripper_width,            # state (T)
+                state_gripper_width=state_gripper_width, # state (T,)
                 delta_action=delta_action_output,       # delta_action_output or abs_action_output? (T, 3+3+1)
                 abs_action=abs_action_output,           # abs_action_output (T, 3+3+1)
                 cam_third=rgb_list,                     # cam_third (T, H, W, 3)
@@ -178,4 +169,4 @@ if __name__ == "__main__":
             )
 
             episode_idx += 1
-        break
+

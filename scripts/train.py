@@ -81,7 +81,7 @@ def main(args):
     expr_name = ckpt_dir.split('/')[-1]
 
     train_dataloader, val_dataloader, train_norm_stats, val_norm_stats = (
-        load_sim2sim_data(**data_config)
+        load_sim2sim_data(ckpt_dir = ckpt_dir, **data_config)
     )
 
     if not is_eval:

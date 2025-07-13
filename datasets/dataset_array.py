@@ -1,27 +1,25 @@
-import numpy as np
-import torch
 import os
 import cv2
+import copy
+import time
+import torch
+import shutil
 import pickle
-from time import time
+import threading
+import numpy as np
+from tqdm import tqdm
+from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 import torchvision.transforms as transforms
-from tqdm import tqdm
-import time
 from transforms3d.quaternions import quat2mat, mat2quat
 from transforms3d.euler import euler2mat, mat2euler
 from collections import defaultdict
-import numpy as np
-import threading
-from PIL import Image
 from utils.math_utils import (
     wrap_to_pi,
     euler2quat,
     quat2euler,
     get_pose_from_rot_pos,
 )
-import copy
-
 
 
 timing_stats = defaultdict(list)
@@ -147,8 +145,13 @@ class Sim2SimEpisodeDatasetEff(Dataset):
             if norm_stats_path is None:
                 stats = self.compute_normalize_stats()
             else:
-                with TimingContext("load_norm_stats"):
-                    stats = pickle.load(open(norm_stats_path, "rb"))
+                try:
+                    with TimingContext("load_norm_stats"):
+                        with open(norm_stats_path, "rb") as f:
+                            stats = pickle.load(f)
+                except (FileNotFoundError, pickle.UnpicklingError, EOFError) as e:
+                    print(f"[Warning] Failed to load norm_stats from {norm_stats_path}: {e}")
+                    stats = self.compute_normalize_stats()
             self.update_obs_normalize_params(stats)
 
             result_0 = self.__getitem__(0) 
@@ -442,13 +445,18 @@ def step_collate_fn(samples):
 
 def load_sim2sim_data(data_roots, num_seeds, train_batch_size, val_batch_size, chunk_size, **kwargs):
     # construct dataset and dataloader
+    # the path should be modified, to save normlize params time.
+    norm_stats_filename = f"norm_stats_{len(data_roots)}.pkl"
+    ckpt_dir = kwargs.pop("ckpt_dir", None)
     train_dataset = Sim2SimEpisodeDatasetEff(
         data_roots,
         num_seeds,
         split="train",
         chunk_size=chunk_size,
-        # norm_stats_path=os.path.join(data_roots[0], f"norm_stats_{len(data_roots)}.pkl"), 
-        norm_stats_path=None, 
+        norm_stats_path=os.path.join(
+            data_roots[0], norm_stats_filename
+        ), 
+        # norm_stats_path=None,
         **kwargs,
     )
     val_dataset = Sim2SimEpisodeDatasetEff(
@@ -457,10 +465,18 @@ def load_sim2sim_data(data_roots, num_seeds, train_batch_size, val_batch_size, c
         split="val",
         chunk_size=chunk_size,
         norm_stats_path=os.path.join(
-            data_roots[0], f"norm_stats_{len(data_roots)}.pkl"
+            data_roots[0], norm_stats_filename,
         ),
         **kwargs,
     )
+
+    norm_stats_path = os.path.join(data_roots[0], norm_stats_filename)
+    if ckpt_dir is not None:
+        os.makedirs(ckpt_dir, exist_ok=True)
+        dst_path = os.path.join(ckpt_dir, norm_stats_filename)
+        shutil.copy(norm_stats_path, dst_path)
+        print(f"Copied {norm_stats_path} to {dst_path}")
+
     train_num_workers = 16 #8 
     val_num_workers = 16 #8 
     print(

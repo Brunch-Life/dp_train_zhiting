@@ -9,17 +9,17 @@ pip install numpy==1.23.5 opencv-python==4.11.0.86 sapien==3.0.0b1 huggingface_h
 ### dataset convert
 
 ```bash
-# python datasets/format_convert_delta.py # we not use this script
 PYTHONPATH=. python datasets/convert_bingwen.py \
---root_dir "dataset/raw/wm_dataset_success/bingwen_datasets/success" \
---save_dir "dataset/processed/test_for_new_bingwen_2_task" \
+--root_dir "/tangyinzhou-tos-volc-engine/bingwen/ms_data/TabletopPickPlaceEnv-v1/" \
+--save_dir "dataset/processed/nonstop_plate_wooden_1000" \
+--tasks-dir nonstop_plate_wooden \
 --max_task_num 1
 ```
 
 
 ### train
 ```bash
-CUDA_VISIBLE_DEVICES=2 PYTHONPATH=. python scripts/train.py \
+CUDA_VISIBLE_DEVICES=0 PYTHONPATH=. python scripts/train.py \
 --data_root dataset/processed/test_for_new_bingwen_2_task \
 --batch_size 128 \
 --lr 1e-5 \

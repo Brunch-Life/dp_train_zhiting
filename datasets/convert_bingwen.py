@@ -1,16 +1,13 @@
 import os
-import cv2
-import time
 import tyro
 import shutil
 import numpy as np
 from tqdm import *
 from PIL import Image
-from typing import Optional
+from typing import Optional, List
 from dataclasses import dataclass
 from transforms3d.euler import euler2mat, mat2euler, quat2euler, quat2mat, euler2quat
 from utils.math_utils import get_pose_from_rot_pos
-from concurrent.futures import ThreadPoolExecutor
 
 
 def get_delta_T_matrix(action_t0, action_t1, frame: str):
@@ -78,6 +75,7 @@ class Args:
     root_dir: str
     save_dir: str
     max_task_num: Optional[int] = None
+    tasks_dir: Optional[List[str]] = None
 
 if __name__ == "__main__":
     args = tyro.cli(Args)
@@ -88,11 +86,31 @@ if __name__ == "__main__":
 
     episode_idx = 0
     os.makedirs(save_dir, exist_ok=True)
-    all_tasks = os.listdir(root_dir)
+
+    try:
+        all_tasks = all_tasks_found = [
+            os.path.join(d, task_name)
+            for d in os.listdir(root_dir)
+            for task_name in os.listdir(os.path.join(root_dir, d))
+        ]
+    except:
+        print(f"Error reading tasks from {root_dir} with timestamp.")
+        all_tasks = all_tasks_found = os.listdir(root_dir)
+
+    if args.tasks_dir:
+        print(f"👉 Filtering for specific tasks: {args.tasks_dir}")
+        tasks_to_run_set = set(args.tasks_dir)
+        all_tasks = [
+            task for task in all_tasks_found 
+            if os.path.basename(task) in tasks_to_run_set
+        ]
+
+    print(f"✅ Found {len(all_tasks)} matching tasks to process")
+    if args.max_task_num is not None:
+        all_tasks = all_tasks[:args.max_task_num]
+        print(f"👉 Only processing the first {args.max_task_num} tasks.")
+
     for task_idx, task in enumerate(all_tasks, start=1):
-        if args.max_task_num is not None and task_idx > args.max_task_num:
-            print(f"Reached max task limit: {args.max_task_num}. Stopping.")
-            break
         load_dir = os.path.join(root_dir, task, "success")
         print(f"\n🔧 Processing task {task_idx}/{len(all_tasks)}: {task}")
         print(f"📂 Loading from: {load_dir}")

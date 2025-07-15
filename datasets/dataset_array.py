@@ -90,7 +90,7 @@ class Sim2SimEpisodeDatasetEff(Dataset):
             self.transformations = None
             self.split = split
             self.use_pre_img = use_pre_img 
-            
+            self.total_episode_num = num_seeds
             self.episode_data = {}
             episode_list = []
             num_steps_list = []
@@ -317,7 +317,7 @@ class Sim2SimEpisodeDatasetEff(Dataset):
         return result_dict
 
     def compute_normalize_stats(self, scale_eps=0.03):
-        print("compute normalize stats...")
+        print("compute and save normalize stats...")
         # min and max scale
         joint_min, joint_max = None, None
         gripper_width_min, gripper_width_max = None, None
@@ -391,26 +391,27 @@ class Sim2SimEpisodeDatasetEff(Dataset):
             "mean": (proprio_min + proprio_max) / 2,
             "scale": np.maximum((proprio_max - proprio_min) / 2, scale_eps),
         }
-        return obs_normalize_params
-
-    def update_obs_normalize_params(self, obs_normalize_params):
-        self.OBS_NORMALIZE_PARAMS = copy.deepcopy(obs_normalize_params)
+        # save normalize params
         pickle.dump(
             obs_normalize_params,
             open(
                 os.path.join(
-                    self.data_roots[0], f"norm_stats_{len(self.data_roots)}.pkl"
+                    self.data_roots[0], f"norm_stats_{len(self.data_roots)}_epsnum_{self.total_episode_num}.pkl"
                 ),
                 "wb",
             ),
         )
+        return obs_normalize_params
 
+    def update_obs_normalize_params(self, obs_normalize_params):
+        self.OBS_NORMALIZE_PARAMS = copy.deepcopy(obs_normalize_params)
         self.pose_gripper_mean = np.concatenate(
             [
                 self.OBS_NORMALIZE_PARAMS[key]["mean"]
                 for key in ["pose", "gripper_width"]
             ]
         )
+
         self.pose_gripper_scale = np.concatenate(
             [
                 self.OBS_NORMALIZE_PARAMS[key]["scale"]
@@ -446,7 +447,7 @@ def step_collate_fn(samples):
 def load_sim2sim_data(data_roots, num_seeds, train_batch_size, val_batch_size, chunk_size, **kwargs):
     # construct dataset and dataloader
     # the path should be modified, to save normlize params time.
-    norm_stats_filename = f"norm_stats_{len(data_roots)}.pkl"
+    norm_stats_filename = f"norm_stats_{len(data_roots)}_epsnum_{num_seeds}.pkl" 
     ckpt_dir = kwargs.pop("ckpt_dir", None)
     train_dataset = Sim2SimEpisodeDatasetEff(
         data_roots,

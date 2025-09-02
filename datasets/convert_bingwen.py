@@ -174,7 +174,7 @@ if __name__ == "__main__":
                 print(f"Removed existing directory: {save_path}")
             os.makedirs(save_path, exist_ok=True)
             
-            rgb_list = np.array(data["observation"]["rgb"], dtype=object) # for ragged data
+            rgb_list = np.array(data["observation"]["rgb"]) 
             # wrist_rgb_list = np.array(data["observation"]["wrist_rgb"], dtype=object) # for ragged data
             wrist_rgb_list = None  # not used in this dataset
             
@@ -182,6 +182,7 @@ if __name__ == "__main__":
                 os.path.join(save_path, "total_steps.npz"),
                 tcp_pose=state_tcp_pose,                # state (T, 3+4)
                 state_gripper_width=state_gripper_width, # state (T,)
+                is_image_encode=data["observation"]["is_image_encode"],# bool (T,)
                 delta_action=delta_action_output,       # delta_action_output or abs_action_output? (T, 3+3+1)
                 abs_action=abs_action_output,           # abs_action_output (T, 3+3+1)
                 cam_third=rgb_list,                     # cam_third (T, H, W, 3)

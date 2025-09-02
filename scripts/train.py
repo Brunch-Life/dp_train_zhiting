@@ -7,6 +7,9 @@ from copy import deepcopy
 from itertools import repeat
 from tqdm import tqdm
 import wandb
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent))
 
 from datasets.dataset_array import load_sim2sim_data
 from utils.utils import compute_dict_mean, set_seed
@@ -220,7 +223,7 @@ if __name__ == '__main__':
                         default="dataset/test_green_bell_pepper/bingwen/data_for_success")
     parser.add_argument('--batch_size', action='store', type=int, help='batch_size',default=16,) #  required=True
     parser.add_argument('--train_seed', action='store', type=int, help='train_seed', default=0,) # required=True
-    parser.add_argument('--total_episode_num', action='store', type=int, help='total_episode_num', default=500,) # required=True
+    parser.add_argument('--total_episode_num', action='store', type=int, help='total_episode_num', default=10,) # required=True
     parser.add_argument('--num_steps', action='store', type=int, help='num_steps', default=200_000,) # required=True
     parser.add_argument('--lr', action='store', type=float, help='lr', default=1e-5,) # required=True
     parser.add_argument('--validate_every', action='store', type=int, default=5000, help='validate_every',

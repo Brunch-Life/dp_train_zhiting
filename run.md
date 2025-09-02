@@ -19,16 +19,16 @@ PYTHONPATH=. python datasets/convert_bingwen.py \
 
 ### train
 ```bash
-CUDA_VISIBLE_DEVICES=0 PYTHONPATH=. python scripts/train.py \
---data_root dataset/processed/test_for_new_bingwen_2_task \
+CUDA_VISIBLE_DEVICES=4 python scripts/train.py \
+--data_root dataset/processed/green_bell_pepper_plate_wooden \
 --batch_size 128 \
 --lr 1e-5 \
 --train_seed 0 \
 --num_steps 200_000 \
---save_every 20_000 \
+--save_every 5_000 \
 --validate_every 2_000 \
 --chunk_size 20 \
---total_episode_num 1000 
+--total_episode_num 500 
 ```
 
 

@@ -7,6 +7,9 @@ from PIL import Image
 from typing import Optional, List
 from dataclasses import dataclass
 from transforms3d.euler import euler2mat, mat2euler, quat2euler, quat2mat, euler2quat
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent))
 from utils.math_utils import get_pose_from_rot_pos
 
 
@@ -177,7 +180,6 @@ if __name__ == "__main__":
             
             np.savez_compressed(
                 os.path.join(save_path, "total_steps.npz"),
-                is_image_encode=data["observation"]["is_image_encode"],# bool
                 tcp_pose=state_tcp_pose,                # state (T, 3+4)
                 state_gripper_width=state_gripper_width, # state (T,)
                 delta_action=delta_action_output,       # delta_action_output or abs_action_output? (T, 3+3+1)

@@ -10,9 +10,9 @@ pip install numpy==1.23.5 opencv-python==4.11.0.86 sapien==3.0.0b1 huggingface_h
 
 ```bash
 PYTHONPATH=. python datasets/convert_bingwen.py \
---root_dir "/tangyinzhou-tos-volc-engine/bingwen/ms_data/TabletopPickPlaceEnv-v1/" \
---save_dir "dataset/processed/nonstop_plate_wooden_1000" \
---tasks-dir nonstop_plate_wooden \
+--root_dir "/home/chenyinuo/data/dataset/bingwen/" \
+--save_dir "dataset/processed/green_bell_pepper_plate_wooden" \
+--tasks-dir green_bell_pepper_plate_wooden \
 --max_task_num 1
 ```
 

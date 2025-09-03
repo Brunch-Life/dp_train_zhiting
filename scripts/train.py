@@ -117,6 +117,10 @@ def make_optimizer(policy):
 def forward_pass(data, policy):
     images = data["images"]
     qpos = data["proprio_state"]
+    mask = [0,0,0,0,0,0,0,0,0,1]
+    mask = torch.tensor(mask)
+    qpos = torch.where(mask == 1, qpos, torch.zeros_like(qpos))
+    
     action = data["action"]
     is_pad = data["is_pad"]
     # image_data, qpos_data, action_data, is_pad = data

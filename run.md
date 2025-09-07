@@ -10,8 +10,8 @@ pip install numpy==1.23.5 opencv-python==4.11.0.86 sapien==3.0.0b1 huggingface_h
 
 ```bash
 python datasets/convert_bingwen.py \
---root_dir "/home/chenyinuo/data/dataset/nonstop/" \
---save_dir "dataset/processed/nonstop_plate_wooden" \
+--root_dir "/ML-vePFS/tangyinzhou/bingwen/ManiSkill/videos/datasets_mp/TabletopPickPlaceEnv-v1/20250905_114601" \
+--save_dir "dataset/processed/nonstop_plate_wooden_new" \
 --tasks-dir nonstop_plate_wooden \
 --max_task_num 1
 ```
@@ -20,7 +20,7 @@ python datasets/convert_bingwen.py \
 ### train
 ```bash
 CUDA_VISIBLE_DEVICES=0 python scripts/train.py \
---data_root dataset/processed/nonstop_plate_wooden \
+--data_root dataset/processed/nonstop_plate_wooden_new \
 --batch_size 128 \
 --lr 1e-5 \
 --train_seed 0 \

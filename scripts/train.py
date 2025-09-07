@@ -9,6 +9,8 @@ from tqdm import tqdm
 import wandb
 import sys
 from pathlib import Path
+from PIL import Image
+import imageio
 sys.path.append(str(Path(__file__).parent.parent))
 
 from datasets.dataset_array import load_sim2sim_data
@@ -39,7 +41,7 @@ def main(args):
     name = f"dp_train_{stamp}" # change here
     num_seeds = args['total_episode_num']  # 500
 
-    camera_names = ["third"]
+    camera_names = ["third", "wrist"]
     usages = ["obs"]
 
     data_config = {
@@ -116,8 +118,17 @@ def make_optimizer(policy):
 
 def forward_pass(data, policy):
     images = data["images"]
+
+    # # save image_data
+    # image_save = images[0,1].cpu().numpy()
+    # image_save = image_save.transpose(1, 2, 0)
+    # image_save = image_save * 255
+    # image_save = image_save.astype(np.uint8)
+    # imageio.imwrite("debug_image/image_data_dp.png", image_save)
+    # # breakpoint()
+
     qpos = data["proprio_state"]
-    mask = [0,0,0,0,0,0,0,0,0,1]
+    mask = [1,1,1,1,1,1,1,1,1,1]
     mask = torch.tensor(mask)
     qpos = torch.where(mask == 1, qpos, torch.zeros_like(qpos))
     

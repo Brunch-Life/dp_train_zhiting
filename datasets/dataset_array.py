@@ -519,7 +519,7 @@ if __name__ == "__main__":
             val_batch_size=128,
             chunk_size=20,
             usages = ["obs"],
-            camera_names=["third"]  #, "wrist"
+            camera_names=["third", "wrist"]  #, "wrist"
         )
 
         for i, batch in enumerate(train_loader):

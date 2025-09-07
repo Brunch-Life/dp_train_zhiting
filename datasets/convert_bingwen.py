@@ -90,15 +90,8 @@ if __name__ == "__main__":
     episode_idx = 0
     os.makedirs(save_dir, exist_ok=True)
 
-    try:
-        all_tasks = all_tasks_found = [
-            os.path.join(d, task_name)
-            for d in os.listdir(root_dir)
-            for task_name in os.listdir(os.path.join(root_dir, d))
-        ]
-    except:
-        print(f"Error reading tasks from {root_dir} with timestamp.")
-        all_tasks = all_tasks_found = os.listdir(root_dir)
+    # 直接从根目录读取所有任务，不遍历子文件夹
+    all_tasks = all_tasks_found = os.listdir(root_dir)
 
     if args.tasks_dir:
         print(f"👉 Filtering for specific tasks: {args.tasks_dir}")
@@ -174,9 +167,9 @@ if __name__ == "__main__":
                 print(f"Removed existing directory: {save_path}")
             os.makedirs(save_path, exist_ok=True)
             
-            rgb_list = np.array(data["observation"]["rgb"]) 
-            # wrist_rgb_list = np.array(data["observation"]["wrist_rgb"], dtype=object) # for ragged data
-            wrist_rgb_list = None  # not used in this dataset
+            rgb_list = np.array(data["observation"]["rgb"], dtype=object) 
+            wrist_rgb_list = np.array(data["observation"]["wrist_rgb"], dtype=object) # for ragged data
+            # wrist_rgb_list = None  # not used in this dataset
             
             np.savez_compressed(
                 os.path.join(save_path, "total_steps.npz"),

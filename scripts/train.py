@@ -128,7 +128,8 @@ def forward_pass(data, policy):
     # # breakpoint()
 
     qpos = data["proprio_state"]
-    mask = [1,1,1,1,1,1,1,1,1,1]
+    # mask = [1,1,1,1,1,1,1,1,1,1]
+    mask = [0,0,0,0,0,0,0,0,0,0]
     mask = torch.tensor(mask)
     qpos = torch.where(mask == 1, qpos, torch.zeros_like(qpos))
     

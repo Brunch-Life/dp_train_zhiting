@@ -13,6 +13,8 @@ from diffusers.schedulers.scheduling_ddim import DDIMScheduler
 from diffusers.training_utils import EMAModel
 
 
+
+
 class DiffusionPolicy(nn.Module):
     def __init__(self, args_override):
         super().__init__()
@@ -86,6 +88,7 @@ class DiffusionPolicy(nn.Module):
             })
         })
 
+        # FIXME
         nets = nets.float().cuda()
         ENABLE_EMA = True
         if ENABLE_EMA:
@@ -95,15 +98,38 @@ class DiffusionPolicy(nn.Module):
         self.nets = nets
         self.ema = ema
 
-        # setup noise scheduler
+        def cosine_beta_schedule(timesteps, s=0.008):
+            """与您代码中完全相同的cosine调度函数"""
+            steps = timesteps + 1
+            x = np.linspace(0, steps, steps)
+            alphas_cumprod = np.cos(((x / steps) + s) / (1 + s) * np.pi * 0.5) ** 2
+            alphas_cumprod = alphas_cumprod / alphas_cumprod[0]
+            betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
+            betas_clipped = np.clip(betas, a_min=0, a_max=0.999)
+            return betas_clipped
+
+        # 生成与您代码完全相同的beta值
+        custom_betas = cosine_beta_schedule(50)
+
+        # 使用自定义beta值创建调度器
         self.noise_scheduler = DDIMScheduler(
             num_train_timesteps=50,
-            beta_schedule='squaredcos_cap_v2',
+            trained_betas=custom_betas,      # 使用您的自定义cosine调度
             clip_sample=True,
             set_alpha_to_one=True,
             steps_offset=0,
             prediction_type='epsilon'
         )
+
+        # # setup noise scheduler
+        # self.noise_scheduler = DDIMScheduler(
+        #     num_train_timesteps=50,
+        #     beta_schedule='squaredcos_cap_v2',
+        #     clip_sample=True,
+        #     set_alpha_to_one=True,
+        #     steps_offset=0,
+        #     prediction_type='epsilon'
+        # )
 
         n_parameters = sum(p.numel() for p in self.parameters())
         print("number of parameters: %.2fM" % (n_parameters / 1e6,))
@@ -120,7 +146,6 @@ class DiffusionPolicy(nn.Module):
             for cam_id in range(self.num_images):
                 cam_image = image[:, cam_id]
                 cam_features = nets['policy']['backbones'][cam_id](cam_image)
-                # print(cam_features.shape)
                 pool_features = nets['policy']['pools'][cam_id](cam_features)
                 pool_features = torch.flatten(pool_features, start_dim=1)
                 out_features = nets['policy']['linears'][cam_id](pool_features)
@@ -181,6 +206,9 @@ class DiffusionPolicy(nn.Module):
                 out_features = nets['policy']['linears'][cam_id](pool_features)
                 all_features.append(out_features)
 
+
+            # yinuo: qpos 0
+            qpos = torch.zeros_like(qpos)
             obs_cond = torch.cat(all_features + [qpos], dim=1)
 
             # initialize action from Guassian noise
@@ -208,7 +236,6 @@ class DiffusionPolicy(nn.Module):
                     timestep=k,
                     sample=naction
                 ).prev_sample
-
             return naction
 
     def serialize(self):

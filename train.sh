@@ -1,4 +1,4 @@
-CUDA_VISIBLE_DEVICES=3 python scripts/train.py \
+CUDA_VISIBLE_DEVICES=2 python scripts/train.py \
 --data_root dataset/processed/nonstop_plate_wooden_new \
 --batch_size 128 \
 --lr 1e-5 \

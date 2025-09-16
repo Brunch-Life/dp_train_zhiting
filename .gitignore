@@ -17,3 +17,7 @@ checkpoint
 try.py
 dataset
 ckpts/
+
+test.sh
+
+debug/

@@ -1,0 +1,31 @@
+{
+    // 使用 IntelliSense 了解相关属性。 
+    // 悬停以查看现有属性的描述。
+    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Train Script",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/train.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--data_root", "dataset/processed/nonstop_plate_wooden_new",
+                "--batch_size", "128",
+                "--lr", "1e-5",
+                "--train_seed", "0",
+                "--num_steps", "200_000",
+                "--save_every", "5_000",
+                "--validate_every", "5_000",
+                "--chunk_size", "20",
+                "--total_episode_num", "500",
+                "--resume_ckpt_path", "/ML-vePFS/tangyinzhou/yinuo/dp_train_zhiting/ckpts/20250916_132545/policy_step_200000_seed_0.ckpt"
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "1"
+            },
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

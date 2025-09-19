@@ -1,4 +1,4 @@
-CUDA_VISIBLE_DEVICES=0 python scripts/train.py \
+CUDA_VISIBLE_DEVICES=1 python scripts/train.py \
 --data_root dataset/processed/nonstop_plate_wooden_new \
 --batch_size 128 \
 --lr 1e-5 \
@@ -8,3 +8,4 @@ CUDA_VISIBLE_DEVICES=0 python scripts/train.py \
 --validate_every 5_000 \
 --chunk_size 20 \
 --total_episode_num 500 \
+--resume_ckpt_path /ML-vePFS/tangyinzhou/yinuo/dp_train_zhiting/ckpts/20250916_132545/policy_step_200000_seed_0.ckpt \

@@ -263,6 +263,7 @@ class Sim2SimEpisodeDatasetEff(Dataset):
         with TimingContext("pose_processing"):
             pose_at_obs = None
             abs_pose_chunk = []
+            abs_action_10d_chunk = []
             action_gripper_width_chunk = []
             proprio_state = np.zeros((10,), dtype=np.float32)
             robot_state = np.zeros((10,), dtype=np.float32)
@@ -293,6 +294,12 @@ class Sim2SimEpisodeDatasetEff(Dataset):
                     abs_pose_chunk.append(abs_action_pose)
                     action_gripper_width_chunk.append(abs_action[-1:])
 
+                    abs_action_10d = np.concatenate([abs_action_pose[:3,3],
+                                                     abs_action_pose[:3, :2].reshape(-1),
+                                                    abs_action[-1:]], 
+                                                    axis=-1)
+                    abs_action_10d_chunk.append(abs_action_10d)
+
             # compute the relative pose
             _pose_relative = np.eye(4)
             robot_state[:9] = np.concatenate(
@@ -312,7 +319,11 @@ class Sim2SimEpisodeDatasetEff(Dataset):
 
             result_dict["robot_state"] = robot_state # the pose of robot in the world frame, shape (10,), not used during training
             result_dict["proprio_state"] = proprio_state # shape (10,)
-            result_dict["action"] = delta_action_chunk # shape (chunk_size, 10)
+            # result_dict["action"] = delta_action_chunk # shape (chunk_size, 10)
+            abs_action_10d_all = np.zeros((self.chunk_size, 10), dtype=np.float32)
+            if len(abs_action_10d_chunk) > 0:
+                abs_action_10d_all[:len(abs_action_10d_chunk)] = np.stack(abs_action_10d_chunk, axis=0)
+            result_dict["action"] = abs_action_10d_all # shape (chunk_size, 10)
 
         return result_dict
 
@@ -377,6 +388,8 @@ class Sim2SimEpisodeDatasetEff(Dataset):
             proprio_max = safe_maximum(
                 proprio_max, proprio_pose
             )
+            action_min = safe_min(action_pose, axis=0)
+            action_max = safe_max(action_pose, axis=0)
 
         obs_normalize_params = {}
         obs_normalize_params["pose"] = {
